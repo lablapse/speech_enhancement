@@ -1,0 +1,16 @@
+model: 
+  fs: 8000
+  nperseg: 256
+  nfft: 256
+  noverlap: 129
+  time_frames: 8
+  phase_aware: False
+  batch_size: 512
+  epochs: 30
+  random: True
+
+dataset:
+  noise_list: ['Babble', 'Cafe', 'Car', 'LR', 'Street', 'White']
+  SNR_list: [-5, 0, 5, 10, 15, 20]
+
+testID: 'Test3'

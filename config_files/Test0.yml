@@ -1,0 +1,16 @@
+model: 
+  fs: 8000
+  nperseg: 256
+  nfft: 256
+  noverlap: 129
+  time_frames: 8
+  phase_aware: False
+  batch_size: 64
+  epochs: 30
+  random: True
+
+dataset:
+  noise_list: ['Babble']
+  SNR_list: [0]
+
+testID: 'Test0'
