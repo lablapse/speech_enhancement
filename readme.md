@@ -7,6 +7,6 @@
 &emsp; &emsp; &emsp; &emsp; &nbsp; Gabriel Saatkamp Lazaretti
  
  
-**Descrição**: Comparação de desempenho entre modelos de aprimoramento de fala aplicados ao dataset NTCD-TIMIT. Os modelos testados são um rede neural convolucional e uma rede recorrente baseada em camadas LSTM.
+**Descrição**: Comparação de desempenho entre modelos de aprimoramento de fala aplicados ao dataset NTCD-TIMIT. Os modelos testados são um rede neural convolucional e uma rede convolucional recorrente utilizando camadas GRU.
  
 **Dataset**: [NTCD-TIMIT](https://zenodo.org/record/1172064)
