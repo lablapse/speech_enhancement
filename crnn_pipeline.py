@@ -1,21 +1,5 @@
-# %% [markdown]
-# # Projeto Final da Disciplina de Aprendizado de Máquina
-# ### **Tema**: Comparação de desempenho entre modelos de aprimoramento de fala utilizando redes neurais
-# 
-# ---
-# 
-# **Estudantes**: Augusto Cesar Becker &emsp; &emsp; &emsp; &emsp; **Data**: 06/07/2023  
-# &emsp; &emsp; &emsp; &emsp; &nbsp; Gabriel Saatkamp Lazaretti
-# 
-# 
-# **Descrição**: Comparação de desempenho entre modelos de aprimoramento de fala aplicados ao dataset NTCD-TIMIT. Os modelos testados são um rede neural convolucional e uma rede recorrente baseada em camadas LSTM.
-# 
-# **Dataset**: [NTCD-TIMIT](https://zenodo.org/record/1172064)
-
-# %% [markdown]
 # # **Imports**
 
-# %%
 import os
 import yaml
 import numpy as np
@@ -30,16 +14,13 @@ from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, ReduceLROnPla
 
 import project_functions as pf
 
-# %% [markdown]
 # # **Configurações Globais**
 
-# %%
 # Define a GPU visível (0 -> 3080; 1 -> 3090)
 pf.set_gpu(0)
 
 # Carrega o arquivo de configurações do teste atual
 with open('./config_files/CurrentTest.yml', 'r') as file:
-#with open('./config_files/Test0.yml', 'r') as file:
     test_config = yaml.safe_load(file)
 
 # Variáveis globais
@@ -60,13 +41,10 @@ buff_mult = test_config['dataset']['buff_mult']
 
 testID = test_config['testID']
 
-# %% [markdown]
 # # 1. **Análise exploratória dos dados**
 
-# %% [markdown]
 # > ## 1.1. Informações do dataset
 
-# %%
 Clean_file_list = []
 for dirpath,dirnames,filenames in os.walk('/datasets/ntcd_timit/Clean'):
     if dirpath.__contains__('volunteers'): # Linha para ignorar os lipspeakers
@@ -74,28 +52,22 @@ for dirpath,dirnames,filenames in os.walk('/datasets/ntcd_timit/Clean'):
             if file.endswith('.wav'):
                 Clean_file_list.append(dirpath + '/' + file) 
 
-# %%
 n_SNRs = 6
 n_Noises = 6
 print('Number of clean files (Targets): ', len(Clean_file_list))
 print('Total number of noisy files (Inputs): ', len(Clean_file_list)*n_SNRs*n_Noises)
 
-# %% [markdown]
 # # 2. **Separação do dataset**
 
-# %% [markdown]
 # > ## 2.0. Observações
 
-# %% [markdown]
 # * Nessa seção, o dataset será separado da seguinte forma:
 # > * 70% dos falantes serão separados para treinamento, 20% para validação e 10% para testes
 # > * Serão utilizados na avaliação do desempenho de testes e validação somente as frases não utilizadas em nenhum outro conjunto
 # > * Realizar testes/validação em outro momento também com frases que ocorrem no treinamento (não inéditas)
 
-# %% [markdown]
 # > ## 2.1. Listas de voluntários e frases
 
-# %%
 # Define a pasta do subconjunto de dados com os áudios limpos
 clean_folder_path = '/datasets/ntcd_timit/Clean'
 
@@ -127,16 +99,13 @@ for speaker in spk_list:
         else:
             wav_df.loc[wav] += np.asarray([1] + mask)
 
-# %% [markdown]
 # > ## 2.2. Separação do dataset
 
-# %%
 # Separa a lista de voluntários em treino (70%), validação (20%) e teste (10%)
 # Separar mais arquivos para teste e validação 
 spk_train_val_list, spk_test_list = train_test_split(spk_list, test_size = 0.1, random_state = 0)
 spk_train_list, spk_val_list = train_test_split(spk_train_val_list, test_size = 0.2, random_state = 0)
 
-# %%
 # Define a pasta do subconjunto de dados com o dataset copleto
 full_ds_folder = '/datasets/ntcd_timit/'
 
@@ -166,24 +135,19 @@ print('-'*50)
 print('Total de arquvivos para teste: ', len(test_files))
 print('Sentenças únicas para teste: ', len(test_wav_set))
 
-# %%
 total_unique_sentences = len(train_wav_set) + len(val_wav_set) + len(test_wav_set)
 
 print(f'Tamanho relativo do dataset de treinamento: {(len(train_wav_set)/total_unique_sentences):.2%}')
 print(f'Tamanho relativo do dataset de validação: {(len(val_wav_set)/total_unique_sentences):.2%}')
 print(f'Tamanho relativo do dataset de treinamento: {(len(test_wav_set)/total_unique_sentences):.2%}')
 
-# %%
 print("Exemplo de formato de par de arquivos a ser entregue aos batch generators:")
 print(train_files[0])
 
-# %% [markdown]
 # # 3. **Treino da Rede Neural Convolucional**
 
-# %% [markdown]
 # > ## 3.1. Rede Neural Convolucional Recorrente (CRNN)
 
-# %%
 model_name = 'DenoisingCRNN'
 
 # Reduz o dataset (samples_per_SNR = -1 -> dataset completo)
@@ -218,7 +182,6 @@ print('Total de batches de validação:   ', len(val_list) )
 print('Total de arquivos de áudio de treinamento:', len(train_list))
 print('Total de arquivos de áudio de validação:  ', len(val_list)  )
 
-# %%
 K.clear_session()
 
 model_CRNN = pf.CRNN_model((nfft//2 + 1, time_frames, 1))
@@ -244,7 +207,6 @@ if not os.path.exists(checkpoint_folder):
 if not os.path.exists(log_folder):
     os.mkdir(log_folder)
 
-# %%
 callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=10),
              ReduceLROnPlateau(monitor='val_SDR', factor=0.75, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
              ModelCheckpoint(filepath=CRNN_checkpoint_path, save_best_only = True, save_format='tf', monitor='val_SDR', mode='max'),

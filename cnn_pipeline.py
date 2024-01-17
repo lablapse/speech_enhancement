@@ -48,6 +48,7 @@ testID = test_config['testID']
 # # 1. **Análise exploratória dos dados**
 
 # # 1.1. Informações do dataset
+# # 1.1. Informações do dataset
 
 Clean_file_list = []
 for dirpath,dirnames,filenames in os.walk('/datasets/ntcd_timit/Clean'):
