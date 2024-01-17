@@ -37,7 +37,6 @@ pf.set_gpu(0)
 
 # Carrega o arquivo de configurações do teste atual
 with open('./config_files/CurrentTest.yml', 'r') as file:
-#with open('./config_files/Test0.yml', 'r') as file:
     test_config = yaml.safe_load(file)
 
 # Variáveis globais
@@ -244,7 +243,7 @@ curves_file = '/home/augustobecker/projects/speech_enhancement/data/' + curves_f
 
 print('\nSalvando os dados das curvas...')
 with open(curves_file, 'wb') as f:
-    pickle.dump(curves_file, f)
+    pickle.dump(CRNN_curves, f)
 print('Pronto!')
 
 plt.plot(SNR_list, CRNN_curves['Train'], 'k.-', label = 'SDR de Treino')

@@ -7,7 +7,7 @@ current_config = '/home/augustobecker/projects/speech_enhancement/config_files/C
 config_files = os.listdir(config_folder)
 print(config_files)
 
-input()
+input("Pressione \"enter\" para continuar...")
 
 for cfg in config_files:
     copy(config_folder + cfg, current_config)
@@ -15,3 +15,5 @@ for cfg in config_files:
     subprocess.run(["python3", "crnn_pipeline.py"], check = True)
     subprocess.run(["python3", "cnn_tests.py"], check = True)
     subprocess.run(["python3", "crnn_tests.py"], check = True)
+    
+os.remove(current_config)
