@@ -477,8 +477,8 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
             clean_angle_batch = np.reshape(clean_angle, np.shape(clean_STFT) + (1,))
             noisy_angle_batch = np.reshape(noisy_angle, np.shape(noisy_STFT) + (1,))
             
-            yield (np.array(noisy_STFT_batch),np.array(clean_STFT_batch),
-                   np.array(noisy_angle_batch),np.array(clean_angle_batch))
+            yield (tensor(noisy_STFT_batch),tensor(clean_STFT_batch),
+                   tensor(noisy_angle_batch),tensor(clean_angle_batch))
                 
 #            batch = (tensor(noisy_STFT_batch[0:batch_size]),tensor(clean_STFT_batch[0:batch_size]))
 #            
@@ -496,7 +496,7 @@ def reconstruct_signal(model, batch, noverlap = None):
     noisy_angle_batch = batch[2][:,:,-1,0]
     noisy_angle_batch = np.reshape(noisy_angle_batch,np.shape(batch[1])[0:2]).T
         
-    pred_STFT_abs = model.predict(noisy_STFT_batch,verbose = 0)
+    pred_STFT_abs = model(noisy_STFT_batch)  # Chama o modelo diretamente, teoricamente evita os memory leaks de model.predict()
     pred_STFT_abs = np.reshape(pred_STFT_abs,np.shape(batch[1])[0:2]).T
     
     noisy_STFT_abs = batch[0][:,:,-1,0]
