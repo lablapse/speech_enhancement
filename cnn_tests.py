@@ -227,11 +227,11 @@ for k in range(len(SNR_list)):
                             draw_function = pf.draw_files)
     
     train_gen = pf.full_audio_batch_generator(train_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                              sample_rate = fs, phase_aware_target = phase_aware, train_mode = False)
+                                              sample_rate = fs, phase_aware_target = phase_aware)
     val_gen = pf.full_audio_batch_generator(val_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                            sample_rate = fs, phase_aware_target = phase_aware, train_mode = False)
+                                            sample_rate = fs, phase_aware_target = phase_aware)
     test_gen = pf.full_audio_batch_generator(test_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                             sample_rate = fs, phase_aware_target = phase_aware, train_mode = False)
+                                             sample_rate = fs, phase_aware_target = phase_aware)
 
     print('Calculando métricas sobre o conjunto de treino medidas no domínio do tempo (em dB)...')
     CNN_curves['Train'][k] = pf.time_tests(model_CNN, train_gen, len(train_list), metrics_dict = metrics)['SDR']

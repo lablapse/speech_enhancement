@@ -210,8 +210,7 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
         # (Armazenadas quando o números de espectrogramas carregados excede o batch_size)
         last_run_clean_STFT = []
         last_run_noisy_STFT = []
-        last_run_clean_angle = []
-        last_run_noisy_angle = []
+        
         # (Re)inicializa a lista de arquivos restantes a serem carregados
         remaining_files = set(file_list)
         
@@ -225,8 +224,6 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
             # Inicializa o batch com as amostras excedentes da última chamada ao gerador
             clean_STFT_batch = last_run_clean_STFT
             noisy_STFT_batch = last_run_noisy_STFT
-            clean_angle_batch = last_run_clean_angle
-            noisy_angle_batch = last_run_noisy_angle
             
             # Loop para carregar os espectrogramas (amostras) até preencher todo o batch (com batch_size amostras)
             while np.shape(clean_STFT_batch)[0] < buffer_mult*batch_size and len(remaining_files) > 0:
@@ -238,7 +235,7 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
                 clean_audio = load_audio_file(file_pair[0][1], sample_rate = sample_rate)
                 noisy_audio = load_audio_file(file_pair[0][0], sample_rate = sample_rate)
                 
-                noisy_STFT, clean_STFT, noisy_angle, clean_angle = audio_pre_processing(
+                noisy_STFT, clean_STFT, _, _ = audio_pre_processing(
                     clean_audio, noisy_audio, nperseg = nperseg, nfft = nfft, time_frames = time_frames,  
                     noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target)
                 
@@ -246,8 +243,6 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
                 audio_BS = np.shape(clean_STFT)[0]
                 clean_STFT_batch.extend(np.reshape(clean_STFT, (audio_BS, nfft//2 + 1, 1, 1)))
                 noisy_STFT_batch.extend(np.reshape(noisy_STFT, (audio_BS, nfft//2 + 1, time_frames, 1)))
-                clean_angle_batch.extend(np.reshape(clean_angle, (audio_BS, nfft//2 + 1, 1, 1)))
-                noisy_angle_batch.extend(np.reshape(noisy_angle, (audio_BS, nfft//2 + 1, time_frames, 1)))
             
             # Código para embaralhar o batch
             if random_batches:
@@ -255,22 +250,16 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
                 np.random.shuffle(shuffle_mask)
                 clean_STFT_batch = np.array(clean_STFT_batch)[shuffle_mask]
                 noisy_STFT_batch = np.array(noisy_STFT_batch)[shuffle_mask]
-                clean_angle_batch = np.array(clean_angle_batch)[shuffle_mask]
-                noisy_angle_batch = np.array(noisy_angle_batch)[shuffle_mask]
                 
             # Verifica se o batch possui excedente de amostras
             if len(clean_STFT_batch) > batch_size:
                 # Atualiza o array com o excedente de amostras
                 last_run_clean_STFT = list(clean_STFT_batch[batch_size:])
                 last_run_noisy_STFT = list(noisy_STFT_batch[batch_size:])
-                last_run_clean_angle = list(clean_angle_batch[batch_size:])
-                last_run_noisy_angle = list(noisy_angle_batch[batch_size:])
             else: # len(clean_STFT_batch) <= batch_size
                 # Limpa o array com o excedente de amostras
                 last_run_clean_STFT = []
                 last_run_noisy_STFT = []
-                last_run_clean_angle = []
-                last_run_noisy_angle = []
             
             # Retorna a tupla com o batch de amostras corrompidas e limpas
             k += 1    # Debug
@@ -458,8 +447,7 @@ def SDR(y_true, y_pred):
 
 # Gerador de batches para carregamento de um áudio completo em único batch, para testes somente
 def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nfft = None,
-                               time_frames = 16, noverlap = None, train_mode = True, 
-                               phase_aware_target = False):
+                               time_frames = 16, noverlap = None, phase_aware_target = False):
     if nfft == None:
         nfft = nperseg
     if noverlap == None:
@@ -489,11 +477,12 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
             clean_angle_batch = np.reshape(clean_angle, np.shape(clean_STFT) + (1,))
             noisy_angle_batch = np.reshape(noisy_angle, np.shape(noisy_STFT) + (1,))
             
-            if train_mode:
-                yield (np.array(noisy_STFT_batch),np.array(clean_STFT_batch))
-            else:
-                yield (np.array(noisy_STFT_batch),np.array(clean_STFT_batch),
-                       np.array(noisy_angle_batch),np.array(clean_angle_batch))
+            yield (np.array(noisy_STFT_batch),np.array(clean_STFT_batch),
+                   np.array(noisy_angle_batch),np.array(clean_angle_batch))
+                
+#            batch = (tensor(noisy_STFT_batch[0:batch_size]),tensor(clean_STFT_batch[0:batch_size]))
+#            
+#            yield batch
 
 # Função para reconstruir os sinais a partir dos batches com espectrogramas do áudio ruidoso
 # e espectros do áudio limpo
