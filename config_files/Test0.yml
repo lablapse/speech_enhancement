@@ -2,7 +2,7 @@ model:
   fs: 8000
   nperseg: 256
   nfft: 256
-  noverlap: 129
+  noverlap: 128
   time_frames: 8
   phase_aware: False
   batch_size: 64
