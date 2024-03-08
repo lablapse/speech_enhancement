@@ -202,7 +202,7 @@ model_CNN = pf.CR_CED_model((nfft//2 + 1, time_frames, 1), norm_params)
 
 model_CNN.compile(loss=tf.keras.losses.mean_squared_error,
               optimizer=tf.keras.optimizers.Adam(learning_rate = 0.0015, beta_1 = 0.9, beta_2 = 0.999, epsilon = 1.0e-8),
-              metrics=[pf.MSE_dB])
+              metrics=[pf.SDR])
 
 model_CNN.load_weights(CNN_checkpoint_path)
 

@@ -435,10 +435,11 @@ def CRNN_model(input_shape):
     
     return model_CRNN
 
-# MSE metric (in dB)
-def MSE_dB(y_true, y_pred):
+# Signal to distortion ratio metric (in dB)
+def SDR(y_true, y_pred):
     P_distortion = K.mean(K.square(y_true - y_pred))
-    return 10*K.log(P_distortion)/K.log(10.0)
+    P_clean_signal = K.mean(K.square(y_true))
+    return 10*K.log(P_clean_signal/P_distortion)/K.log(10.0)
 
 #################################################################################################################
 # Testes                                                                                                        #
