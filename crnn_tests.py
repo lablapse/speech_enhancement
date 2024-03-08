@@ -195,7 +195,7 @@ model_CRNN = pf.CRNN_model((nfft//2 + 1, time_frames, 1))
 
 model_CRNN.compile(loss=tf.keras.losses.mean_squared_error,
               optimizer=tf.keras.optimizers.Adam(learning_rate = 0.0015, beta_1 = 0.9, beta_2 = 0.999, epsilon = 1.0e-8),
-              metrics=[pf.SDR])
+              metrics=[pf.MSE_dB])
 
 model_CRNN.load_weights(CRNN_checkpoint_path)
 

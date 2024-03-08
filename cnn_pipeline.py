@@ -247,7 +247,7 @@ model_CNN = pf.CR_CED_model((nfft//2 + 1, time_frames, 1), norm_params = norm_pa
 
 model_CNN.compile(loss=tf.keras.losses.mean_squared_error,
               optimizer=tf.keras.optimizers.Adam(learning_rate = 0.0015, beta_1 = 0.9, beta_2 = 0.999, epsilon = 1.0e-8),
-              metrics=[pf.SDR])
+              metrics=[pf.MSE_dB])
 
 model_CNN.summary()
 
@@ -264,9 +264,9 @@ if not os.path.exists(log_folder):
 
 # %%
 callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=10),
-             ReduceLROnPlateau(monitor='val_SDR', factor=0.5, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
+             ReduceLROnPlateau(monitor='val_MSE_dB', factor=0.5, min_delta = 0.2, patience=4, mode='min', min_lr=1e-6),
              #ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_format='tf', monitor='val_SDR', mode='max'),
-             ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_weights_only = True, monitor='val_SDR', mode='max'),
+             ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_weights_only = True, monitor='val_MSE_dB', mode='max'),
              CSVLogger(filename=CNN_log_path, separator=',', append=False)
             ]
 
@@ -294,12 +294,12 @@ plt.title('Curvas de MSE');
 plt.legend();
 
 plt.subplot(1,2,2)
-plt.plot(history_CNN.history['SDR'],'--k',label = 'SDR de Treino');
-plt.plot(history_CNN.history['val_SDR'],'-k',label = 'SDR de Validação');
+plt.plot(history_CNN.history['MSE_dB'],'--k',label = 'MSE de Treino');
+plt.plot(history_CNN.history['val_MSE_dB'],'-k',label = 'MSE de Validação');
 
 plt.xlabel('Épocas');
-plt.ylabel('SDR (dB)');
-plt.title('Curvas de SDR');
+plt.ylabel('MSE (dB)');
+plt.title('Curvas de MSE');
 plt.legend();
 
 plt.suptitle('Curvas de aprendizagem (CNN)')
