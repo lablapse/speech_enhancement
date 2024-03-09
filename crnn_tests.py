@@ -230,11 +230,11 @@ for k in range(len(SNR_list)):
                                           sample_rate = fs, phase_aware_target = phase_aware)
 
     print('Calculando métricas sobre o conjunto de treino medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Train'][k] = pf.time_tests(model_CRNN, train_gen, len(train_list), metrics_dict = metrics)['SDR']
+    CRNN_curves['Train'][k] = pf.time_tests(model_CRNN, train_gen, len(train_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
     print('Calculando métricas sobre o conjunto de validação medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Val'][k] = pf.time_tests(model_CRNN, val_gen, len(val_list), metrics_dict = metrics)['SDR']
+    CRNN_curves['Val'][k] = pf.time_tests(model_CRNN, val_gen, len(val_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
     print('Calculando métricas sobre o conjunto de teste medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Test'][k] = pf.time_tests(model_CRNN, test_gen, len(test_list), metrics_dict = metrics)['SDR']
+    CRNN_curves['Test'][k] = pf.time_tests(model_CRNN, test_gen, len(test_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
 
 print('Pronto!')
 
