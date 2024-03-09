@@ -244,7 +244,7 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
                 clean_STFT_batch.extend(np.reshape(clean_STFT, (audio_BS, nfft//2 + 1, 1, 1)))
                 noisy_STFT_batch.extend(np.reshape(noisy_STFT, (audio_BS, nfft//2 + 1, time_frames, 1)))
             
-            # Código para embaralhar o batch
+            # Código para embaralhar o batch -> Necessário para entregar diversidade ao batch durante o treinamento
             if random_batches:
                 shuffle_mask = np.arange(0,np.shape(clean_STFT_batch)[0],1,dtype = int)
                 np.random.shuffle(shuffle_mask)
