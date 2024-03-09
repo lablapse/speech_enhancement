@@ -389,7 +389,7 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         x = Conv2DTranspose(8, (9, 1),padding='valid',**kwargs)(x)
         x = Activation('relu')(x)
         x = BatchNormalization()(x)
-        x = Dropout(0.2)(x)
+        x = Dropout(0.3)(x)
         
         length = 1
     
