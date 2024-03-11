@@ -381,14 +381,14 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             x = Add()([rep_conv[k-1], rep_conv[k]])
         else:
             x = rep_conv[k]
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
+        x = Activation('relu')(x)
         x = Conv2D(30, (5, 1),padding='same',**kwargs)(x)
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
+        x = Activation('relu')(x)
         x = Conv2DTranspose(8, (9, 1),padding='valid',**kwargs)(x)
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
+        x = Activation('relu')(x)
         x = Dropout(0.3)(x)
         
         length = 1
