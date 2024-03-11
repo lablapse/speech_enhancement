@@ -249,7 +249,11 @@ model_CNN.compile(loss=tf.keras.losses.mean_squared_error,
               optimizer=tf.keras.optimizers.Adam(learning_rate = 0.0015, beta_1 = 0.9, beta_2 = 0.999, epsilon = 1.0e-8),
               metrics=[pf.SDR])
 
+# Print the model summary anda save a image file with the model diagram
 model_CNN.summary()
+
+dot_img_file = '/home/augustobecker/projects/speech_enhancement/figures/' + model_name + '_diagram.png'
+tf.keras.utils.plot_model(model_CNN, to_file=dot_img_file, show_shapes=True)
 
 # %%
 checkpoint_folder = '/home/augustobecker/projects/speech_enhancement/checkpoints/'

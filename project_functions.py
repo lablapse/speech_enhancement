@@ -373,25 +373,28 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
               'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
     
-    rep_conv = [] 
+    skip_vertices = [x] 
     
     for k in range(n_reps):
-        rep_conv.append(Conv2D(18, (9, length),padding='valid',**kwargs)(x))
         if skip and k > 0:
-            x = Add()([rep_conv[k-1], rep_conv[k]])
+            x = Add()([skip_vertices[k-1], skip_vertices[k]])
         else:
-            x = rep_conv[k]
+            x = skip_vertices[k]
+        x = Conv2D(18, (9, length),padding='valid',**kwargs)(x)
         x = Activation('relu')(x)
         x = BatchNormalization()(x)
         x = Conv2D(30, (5, 1),padding='same',**kwargs)(x)
         x = Activation('relu')(x)
         x = BatchNormalization()(x)
-        x = Conv2DTranspose(8, (9, 1),padding='valid',**kwargs)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid',**kwargs)(x)
         x = Activation('relu')(x)
         x = BatchNormalization()(x)
         x = Dropout(0.3)(x)
-        
-        length = 1
+        if k < n_reps - 1:
+            # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
+            x = Reshape(input_shape)(x)
+            # Salva o próximo ponto de origem dos dados da conexão skip
+            skip_vertices.append(x) 
     
     x = Conv2D(1, (input_shape[0], 1), padding='same',**kwargs)(x)
     
