@@ -373,11 +373,14 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
               'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
     
+    kwargs_scalar = {'use_bias': False, 
+                     'kernel_initializer': 'ones'}
+    
     skip_vertices = [x] 
     
     for k in range(n_reps):
         if skip and k > 0:
-            x = Add()([skip_vertices[k-1], skip_vertices[k]])
+            x = Add()([Conv2D(1, (1,1), **kwargs_scalar)(skip_vertices[k-1]), skip_vertices[k]])
         else:
             x = skip_vertices[k]
         x = Conv2D(18, (9, length),padding='valid',**kwargs)(x)
