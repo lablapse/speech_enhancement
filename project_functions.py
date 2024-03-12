@@ -381,15 +381,15 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         else:
             x = skip_vertices[k]
         x = Conv2D(18, (9, length),padding='valid',**kwargs)(x)
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
+        x = Activation('relu')(x)
         x = Conv2D(30, (5, 1),padding='same',**kwargs)(x)
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
+        x = Activation('relu')(x)
         x = Conv2DTranspose(length, (9, 1),padding='valid',**kwargs)(x)
-        x = Activation('relu')(x)
         x = BatchNormalization()(x)
-        x = Dropout(0.3)(x)
+        x = Activation('relu')(x)
+        #x = Dropout(0.3)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
