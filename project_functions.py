@@ -21,7 +21,7 @@ from tensorflow.keras import Model
 from tensorflow.keras.utils import register_keras_serializable, plot_model
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten, Reshape, Input, Add
-from tensorflow.keras.layers import Conv1D, Conv2D, MaxPooling2D, Conv2DTranspose, Activation
+from tensorflow.keras.layers import Conv1D, Conv2D, MaxPooling2D, Conv2DTranspose, Activation, ReLU
 from tensorflow.keras.layers import BatchNormalization, UnitNormalization
 from tensorflow.keras.layers import GRU
 from tensorflow.keras import backend as K
@@ -369,8 +369,7 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
     else:
         x = i
     
-    kwargs = {'use_bias': True, 
-              'kernel_initializer': 'glorot_uniform',
+    kwargs = {'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
     
     skip_vertices = [x] 
@@ -380,16 +379,16 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             x = Add()([skip_vertices[k-1], skip_vertices[k]])
         else:
             x = skip_vertices[k]
-        x = Conv2D(18, (9, length),padding='valid',**kwargs)(x)
+        x = Conv2D(18, (9, length),padding='valid', use_bias = False, **kwargs)(x)
         x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-        x = Conv2D(30, (5, 1),padding='same',**kwargs)(x)
+        x = ReLU(negative_slope=0.01)(x)
+        x = Conv2D(30, (5, 1),padding='same', use_bias = False,**kwargs)(x)
         x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-        x = Conv2DTranspose(length, (9, 1),padding='valid',**kwargs)(x)
+        x = ReLU(negative_slope=0.01)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = False, **kwargs)(x)
         x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-        #x = Dropout(0.3)(x)
+        x = ReLU(negative_slope=0.01)(x)
+        x = Dropout(0.1)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
