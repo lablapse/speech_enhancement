@@ -149,8 +149,8 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
     #     janela e outra introduzem erros no sinal temporal.
     #   > A correção é feita na amplitude do sinal limpo, uma vez que este só é utilizado no treinamento e em situações
     #     práticas seria impossível efetuar a correção da amplitude do sinal corrompido.
-    c = np.dot(clean_audio,noisy_audio)/np.linalg.norm(clean_audio)
-    clean_audio = c*clean_audio
+    #c = np.dot(clean_audio,noisy_audio)/np.linalg.norm(clean_audio)
+    #clean_audio = c*clean_audio
     
     # Determina a STFT do sinal de áudio completo
     if part_signal:
