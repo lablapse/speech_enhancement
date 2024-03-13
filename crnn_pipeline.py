@@ -52,6 +52,7 @@ phase_aware = test_config['model']['phase_aware']
 batch_size = test_config['model']['batch_size']
 epochs = test_config['model']['epochs']
 random = test_config['model']['random']
+buff_mult = test_config['dataset']['buff_mult']
 
 noise_list = test_config['dataset']['noise_list']
 SNR_list = test_config['dataset']['SNR_list']
@@ -183,7 +184,6 @@ print(train_files[0])
 
 # %%
 model_name = 'DenoisingCRNN'
-buff_mult = 20
 
 # Reduz o dataset (samples_per_SNR = -1 -> dataset completo)
 SNR_list = ['/'+ str(snr) + '/' for snr in SNR_list]

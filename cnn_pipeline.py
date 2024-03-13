@@ -42,6 +42,7 @@ random = test_config['model']['random']
 
 noise_list = test_config['dataset']['noise_list']
 SNR_list = test_config['dataset']['SNR_list']
+buff_mult = test_config['dataset']['buff_mult']
 
 testID = test_config['testID']
 
@@ -170,7 +171,6 @@ print(train_files[0])
 
 # %%
 model_name = 'DenoisingCNN'
-buff_mult = 20
 
 SNR_list = ['/'+ str(snr) + '/' for snr in SNR_list]
 noise_list = ['/' + noise + '/' for noise in noise_list]
