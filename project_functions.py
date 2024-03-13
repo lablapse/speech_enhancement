@@ -141,6 +141,17 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
     if noverlap == None:
         noverlap = nperseg - nperseg//4 # == ceilling(3*nperseg/4)
         
+    # Tenta corrigir a amplitude do áudio limpo para coincidir com a amplitude desse sinal presente no áudio corrompido
+    #   > Ao estudar o dataset não foi possível concluir se houve ou não um cuidado para manter as amplitudes dos sinais 
+    #     limpos coincidindo com a amplitude desses sinais nos arquivos corrompidos. 
+    #   > Caso as amplitudes não sejam correspondentes as redes são obrigadas a corrigí-las, adicionando complexidade ao
+    #     problema. Outro ponto, como o processamento é feito em janelas, diferenças de amplitude previstas entre uma 
+    #     janela e outra introduzem erros no sinal temporal.
+    #   > A correção é feita na amplitude do sinal limpo, uma vez que este só é utilizado no treinamento e em situações
+    #     práticas seria impossível efetuar a correção da amplitude do sinal corrompido.
+    c = np.dot(clean_audio,noisy_audio)/np.linalg.norm(clean_audio)
+    clean_audio = c*clean_audio
+    
     # Determina a STFT do sinal de áudio completo
     if part_signal:
         f, t, clean_Zxx = signal.stft(clean_audio, sample_rate, nperseg = nperseg,
