@@ -394,13 +394,13 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         else:
             x = skip_vertices[k]
         x = Conv2D(18, (9, length),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization()(x)
+        x = BatchNormalization(scale=False)(x)
         x = ReLU(negative_slope=0.01)(x)
         x = Conv2D(30, (5, 1),padding='same', use_bias = True,**kwargs)(x)
-        x = BatchNormalization()(x)
+        x = BatchNormalization(scale=False)(x)
         x = ReLU(negative_slope=0.01)(x)
         x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization()(x)
+        x = BatchNormalization(scale=False)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.3)(x)
         if k < n_reps - 1:
