@@ -399,7 +399,7 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = False, **kwargs)(x)
         x = BatchNormalization()(x)
         x = ReLU(negative_slope=0.01)(x)
-        #x = Dropout(0.1)(x)
+        x = Dropout(0.3)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
