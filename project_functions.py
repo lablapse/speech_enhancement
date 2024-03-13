@@ -387,7 +387,10 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
     
     for k in range(n_reps):
         if skip and k > 0:
-            x = Add()([skip_vertices[k-1], skip_vertices[k]])
+            # Realiza a conexão skip
+            x = Add()([skip_vertices[k-1], x])
+            # Salva o próximo ponto de origem dos dados da conexão skip
+            skip_vertices.append(x) 
         else:
             x = skip_vertices[k]
         x = Conv2D(18, (9, length),padding='valid', use_bias = True, **kwargs)(x)
@@ -403,8 +406,6 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
-            # Salva o próximo ponto de origem dos dados da conexão skip
-            skip_vertices.append(x) 
     
     x = Conv2D(1, (input_shape[0], 1), padding='same',**kwargs)(x)
     
