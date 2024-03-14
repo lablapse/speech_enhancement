@@ -47,6 +47,7 @@ nfft = test_config['model']['nfft']
 noverlap = test_config['model']['noverlap']
 time_frames = test_config['model']['time_frames']
 phase_aware = test_config['model']['phase_aware']
+use_true_normalization = test_config['model']['use_true_normalization']
 
 noise_list = test_config['dataset']['noise_list']
 SNR_list = [-5, 0, 5, 10, 15, 20]
@@ -182,17 +183,19 @@ checkpoint_folder = '/home/augustobecker/projects/speech_enhancement/checkpoints
 CNN_checkpoint_path = checkpoint_folder + model_name + '_model_best_'+ testID +'.h5'
 
 # %%
-norm_params_file = 'norm_params_' + testID
-norm_params_file = '/home/augustobecker/projects/speech_enhancement/data/' + norm_params_file
+norm_params = None
+if use_true_normalization:
+    norm_params_file = 'norm_params_' + testID
+    norm_params_file = '/home/augustobecker/projects/speech_enhancement/data/' + norm_params_file
 
-if os.path.exists(norm_params_file):
-    print('\nCarregando Parâmetros de Normalização...')
-    with open(norm_params_file, 'rb') as f:
-        norm_params = pickle.load(f)
-else:
-    raise Exception('Não há arquivos com parâmetros de normalização')
+    if os.path.exists(norm_params_file):
+        print('\nCarregando Parâmetros de Normalização...')
+        with open(norm_params_file, 'rb') as f:
+            norm_params = pickle.load(f)
+    else:
+        raise Exception('Não há arquivos com parâmetros de normalização')
 
-print('Pronto!')
+    print('Pronto!')
 
 # %%
 # Carrega o modelo para os testes

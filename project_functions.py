@@ -378,9 +378,10 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         norm_i = Normalize_input(norm_params)(i)
         x = norm_i
     else:
-        x = BatchNormalization(scale = False, center = False)(i)
+        x = BatchNormalization(momentum = 0.999, epsilon = 1e-6, scale = False, center = False)(i)
     
-    kwargs = {'kernel_initializer': 'glorot_uniform',
+    kwargs = {'use_bias': True,
+              'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
     
     skip_vertices = [x] 
@@ -393,13 +394,13 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             skip_vertices.append(x) 
         else:
             x = skip_vertices[k]
-        x = Conv2D(18, (9, length),padding='valid', use_bias = True, **kwargs)(x)
+        x = Conv2D(18, (9, length),padding='valid', **kwargs)(x)
         x = BatchNormalization()(x)
         x = ReLU(negative_slope=0.01)(x)
-        x = Conv2D(30, (5, 1),padding='same', use_bias = True,**kwargs)(x)
+        x = Conv2D(30, (5, 1),padding='same',**kwargs)(x)
         x = BatchNormalization()(x)
         x = ReLU(negative_slope=0.01)(x)
-        x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = True, **kwargs)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid', **kwargs)(x)
         x = BatchNormalization()(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.3)(x)
