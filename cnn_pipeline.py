@@ -39,6 +39,7 @@ phase_aware = test_config['model']['phase_aware']
 batch_size = test_config['model']['batch_size']
 epochs = test_config['model']['epochs']
 random = test_config['model']['random']
+use_true_normalization = test_config['model']['use_true_normalization']
 
 noise_list = test_config['dataset']['noise_list']
 SNR_list = test_config['dataset']['SNR_list']
@@ -228,17 +229,19 @@ print('Total de arquivos de áudio de validação:  ', len(val_list)  )
 
 # %%
 # Determina os parâmetros da normalização dos dados de entrada
-norm_params_file = 'norm_params_' + testID
-norm_params_file = '/home/augustobecker/projects/speech_enhancement/data/' + norm_params_file
+norm_params = None
+if use_true_normalization:
+    norm_params_file = 'norm_params_' + testID
+    norm_params_file = '/home/augustobecker/projects/speech_enhancement/data/' + norm_params_file
 
-print("Calculando os parâmetros de normalização...")
-norm_params = pf.get_normalization_parameters(train_gen(), batches_per_epoch)
-print('Pronto!')
+    print("Calculando os parâmetros de normalização...")
+    norm_params = pf.get_normalization_parameters(train_gen(), batches_per_epoch)
+    print('Pronto!')
 
-print('\nSalvando os parâmetros de normalização...')
-with open(norm_params_file, 'wb') as f:
-    pickle.dump(norm_params, f)
-print('Pronto!')
+    print('\nSalvando os parâmetros de normalização...')
+    with open(norm_params_file, 'wb') as f:
+        pickle.dump(norm_params, f)
+    print('Pronto!')
 
 # %%
 K.clear_session()

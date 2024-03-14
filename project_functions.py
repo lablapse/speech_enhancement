@@ -378,7 +378,7 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         norm_i = Normalize_input(norm_params)(i)
         x = norm_i
     else:
-        x = i
+        x = BatchNormalization(scale = False, center = False)(i)
     
     kwargs = {'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
