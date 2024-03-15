@@ -220,8 +220,8 @@ val_ds = tf_ds.from_generator(val_gen, output_signature =
                                tf.TensorSpec(shape = (batch_size, nfft//2 + 1,           1, 1), dtype = tf.float32)))
 
 buff = 20
-train_ds.prefetch(buffer_size = buff)
-val_ds.prefetch(buffer_size = buff)
+train_ds = train_ds.prefetch(buffer_size = buff)
+val_ds = val_ds.prefetch(buffer_size = buff)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
 print('Total de batches de validação:   ', validation_steps )
