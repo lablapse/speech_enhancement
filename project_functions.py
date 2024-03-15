@@ -393,15 +393,15 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             # Salva o próximo ponto de origem dos dados da conexão skip
             skip_vertix = x
         x = Conv2D(18, (9, length),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.999, epsilon = 1e-6)(x)
+        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
         x = Conv2D(30, (5, 1),padding='same', use_bias = True,**kwargs)(x)
-        x = BatchNormalization(momentum = 0.999, epsilon = 1e-6)(x)
+        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
         x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.999, epsilon = 1e-6)(x)
+        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
         if k < n_reps - 1:
