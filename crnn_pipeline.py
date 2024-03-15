@@ -47,6 +47,7 @@ fs = test_config['model']['fs']
 nperseg = test_config['model']['nperseg']
 nfft = test_config['model']['nfft']
 noverlap = test_config['model']['noverlap']
+window = test_config['model']['window']
 time_frames = test_config['model']['time_frames']
 phase_aware = test_config['model']['phase_aware']
 batch_size = test_config['model']['batch_size']
@@ -202,24 +203,24 @@ test_list = pf.reduce_dataset(test_files, noise_list, SNR_list, test_samples_per
 
 print('Calculando o total de batches de treinamento...')
 batches_per_epoch = pf.compute_dataset_total_batches(train_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
-                                                  noverlap = noverlap, nperseg = nperseg)
+                                                  noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto!')
 print('Calculando o total de batches de validação...')
 validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
-                                                 noverlap = noverlap, nperseg = nperseg)
+                                                 noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto')
 
 def train_gen():
     ref_gen = pf.batch_generator(train_list, batch_size, total_batches = batches_per_epoch - 1, time_frames = time_frames, 
                               phase_aware_target = phase_aware, random_batches = random, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult)
+                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
     while True:
         yield next(ref_gen)
 
 def val_gen():
     ref_gen = pf.batch_generator(val_list, batch_size, total_batches = validation_steps - 1, time_frames = time_frames,
                               phase_aware_target = phase_aware, random_batches = False, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult)
+                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
     while True:
         yield next(ref_gen) 
 

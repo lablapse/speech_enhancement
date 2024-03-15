@@ -92,7 +92,7 @@ def load_audio_file(file_path, sample_rate = None, debug = False):
     return audio
 
 def compute_dataset_total_batches(file_list, batch_size, nperseg = 512, nfft = None, spectrogram_length = 16,
-                                  sample_rate = 16000, noverlap = None):
+                                  sample_rate = 16000, noverlap = None, window = 'hann'):
     if nfft     == None:
         nfft     = nperseg
     if noverlap == None:
@@ -102,7 +102,7 @@ def compute_dataset_total_batches(file_list, batch_size, nperseg = 512, nfft = N
     for file_pair in tqdm(file_list):
         audio = load_audio_file(file_pair[0], sample_rate = sample_rate)
         _, t, _ = signal.stft(audio, sample_rate, nperseg = nperseg, 
-                              nfft = nfft, noverlap = noverlap, window = 'hann')
+                              nfft = nfft, noverlap = noverlap, window = window)
 
         Total_TFs += len(t) - spectrogram_length
         Total_Batches = int(np.ceil(Total_TFs/batch_size))
@@ -135,7 +135,7 @@ def reduce_dataset(file_list, noise_list, SNR_list, samples_per_SNR,
 # https://dsp.stackexchange.com/questions/13436/choosing-the-right-overlap-for-a-window-function
 def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, time_frames = 16, 
                          noverlap = None, sample_rate = 16000, part_signal = False,
-                         phase_aware_target = False):
+                         phase_aware_target = False, window = 'hann'):
     if nfft == None:
         nfft = nperseg
     if noverlap == None:
@@ -156,15 +156,15 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
     if part_signal:
         f, t, clean_Zxx = signal.stft(clean_audio, sample_rate, nperseg = nperseg,
                                 nfft = nfft, noverlap = noverlap, boundary = None, padded= False,
-                                window = 'hann')
+                                window = window)
         f, t, noisy_Zxx = signal.stft(noisy_audio, sample_rate, nperseg = nperseg,
                                 nfft = nfft, noverlap = noverlap, boundary = None, padded= False,
-                                window = 'hann')
+                                window = window)
     else:
         f, t, clean_Zxx = signal.stft(clean_audio, sample_rate, nperseg = nperseg,
-                                nfft = nfft, noverlap = noverlap, window = 'hann')
+                                nfft = nfft, noverlap = noverlap, window = window)
         f, t, noisy_Zxx = signal.stft(noisy_audio, sample_rate, nperseg = nperseg,
-                                nfft = nfft, noverlap = noverlap, window = 'hann')
+                                nfft = nfft, noverlap = noverlap, window = window)
                 
     # Número de espectrogramas a serem extraídos do sinal original
     T = len(t)//time_frames
@@ -206,7 +206,7 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
     
 def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, nperseg = 512, nfft = None,
                     time_frames = 16, noverlap = None, debug = False, random_batches = True, buffer_mult = 20,
-                    phase_aware_target = False):
+                    phase_aware_target = False, window = 'hann'):
     if nfft == None:
         nfft = nperseg
     if noverlap == None:
@@ -248,7 +248,7 @@ def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, n
                 
                 noisy_STFT, clean_STFT, _, _ = audio_pre_processing(
                     clean_audio, noisy_audio, nperseg = nperseg, nfft = nfft, time_frames = time_frames,  
-                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target)
+                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target, window = window)
                 
                 # Adiciona ao batch os espectrogramas adquiridos - com shape (batch_size,nfft//2 + 1,time_frames,1)
                 audio_BS = np.shape(clean_STFT)[0]
@@ -392,16 +392,16 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             x = Add()([skip_vertix, x])
             # Salva o próximo ponto de origem dos dados da conexão skip
             skip_vertix = x
-        x = Conv2D(18, (9, length),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2D(18, (9, length),padding='valid', use_bias = False, **kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
-        x = Conv2D(30, (5, 1),padding='same', use_bias = True,**kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2D(30, (5, 1),padding='same', use_bias = False,**kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
-        x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = True, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = False, **kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
         if k < n_reps - 1:
@@ -463,7 +463,7 @@ def SDR(y_true, y_pred):
 
 # Gerador de batches para carregamento de um áudio completo em único batch, para testes somente
 def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nfft = None,
-                               time_frames = 16, noverlap = None, phase_aware_target = False):
+                               time_frames = 16, noverlap = None, phase_aware_target = False, window = 'hann'):
     if nfft == None:
         nfft = nperseg
     if noverlap == None:
@@ -484,7 +484,7 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
                 
             noisy_STFT, clean_STFT, noisy_angle, clean_angle = audio_pre_processing(
                     clean_audio, noisy_audio, nperseg = nperseg, nfft = nfft, time_frames = time_frames,  
-                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target
+                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target, window = window
                     )
             
             # Adiciona ao batch os espectrogramas adquiridos - com shape (batch_size,nfft//2 + 1,time_frames,1)
@@ -502,7 +502,7 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
 
 # Função para reconstruir os sinais a partir dos batches com espectrogramas do áudio ruidoso
 # e espectros do áudio limpo
-def reconstruct_signal(model, batch, noverlap = None):    
+def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):    
     if noverlap == None:
         nperseg = 2*(np.shape(batch[0])[0] - 1)
         noverlap = nperseg - nperseg//4
@@ -521,8 +521,8 @@ def reconstruct_signal(model, batch, noverlap = None):
     pred_STFT = pred_STFT_abs*np.exp(1j*noisy_angle_batch)
     noisy_STFT = noisy_STFT_abs*np.exp(1j*noisy_angle_batch)
     
-    _,pred_signal = signal.istft(pred_STFT, noverlap = noverlap, window = 'hann')
-    _,noisy_signal = signal.istft(noisy_STFT, noverlap = noverlap, window = 'hann')
+    _,pred_signal = signal.istft(pred_STFT, noverlap = noverlap, window = window)
+    _,noisy_signal = signal.istft(noisy_STFT, noverlap = noverlap, window = window)
         
     # --------- Clean Signal --------    
     clean_STFT_abs = batch[1]
@@ -532,7 +532,7 @@ def reconstruct_signal(model, batch, noverlap = None):
         
     clean_STFT = clean_STFT_abs*np.exp(1j*clean_angle)
         
-    _, clean_signal = signal.istft(clean_STFT, noverlap = noverlap, window = 'hann')
+    _, clean_signal = signal.istft(clean_STFT, noverlap = noverlap, window = window)
     
     return noisy_signal, pred_signal, clean_signal
 
@@ -542,7 +542,7 @@ def SDR_metric(y_true, y_pred, fs = 16000):
 def MSE_metric(y_true, y_pred, fs = 16000):
     return 10*np.log10(np.mean((y_true - y_pred)**2))
     
-def time_tests(model, data, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 16000, noverlap = 64):
+def time_tests(model, data, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 16000, noverlap = 64, window = 'hann'):
     # Monta um dicionário com as métricas ({"nome": list(Métricas para cada batch)})
     scores = {metric: [] for metric in metrics_dict}
     
@@ -550,7 +550,7 @@ def time_tests(model, data, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 
         batch = next(data)
         
         # Reconstroi realiza o denoising e reconstroi os sinais do batch carregado
-        _, pred_signal, clean_signal = reconstruct_signal(model, batch, noverlap = noverlap)
+        _, pred_signal, clean_signal = reconstruct_signal(model, batch, noverlap = noverlap, window = window)
         
         # Roda as métricas selecionadas
         for metric in metrics_dict:

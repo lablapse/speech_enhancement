@@ -44,6 +44,7 @@ fs = test_config['model']['fs']
 nperseg = test_config['model']['nperseg']
 nfft = test_config['model']['nfft']
 noverlap = test_config['model']['noverlap']
+window = test_config['model']['window']
 time_frames = test_config['model']['time_frames']
 phase_aware = test_config['model']['phase_aware']
 
@@ -223,18 +224,18 @@ for k in range(len(SNR_list)):
                             draw_function = pf.draw_files)
     
     train_gen = pf.full_audio_batch_generator(train_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                           sample_rate = fs, phase_aware_target = phase_aware)
+                                           sample_rate = fs, phase_aware_target = phase_aware, window = window)
     val_gen = pf.full_audio_batch_generator(val_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                         sample_rate = fs, phase_aware_target = phase_aware)
+                                         sample_rate = fs, phase_aware_target = phase_aware, window = window)
     test_gen = pf.full_audio_batch_generator(test_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                          sample_rate = fs, phase_aware_target = phase_aware)
+                                          sample_rate = fs, phase_aware_target = phase_aware, window = window)
 
     print('Calculando métricas sobre o conjunto de treino medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Train'][k] = pf.time_tests(model_CRNN, train_gen, len(train_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
+    CRNN_curves['Train'][k] = pf.time_tests(model_CRNN, train_gen, len(train_list), fs = fs, noverlap = noverlap, metrics_dict = metrics, window = window)['SDR']
     print('Calculando métricas sobre o conjunto de validação medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Val'][k] = pf.time_tests(model_CRNN, val_gen, len(val_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
+    CRNN_curves['Val'][k] = pf.time_tests(model_CRNN, val_gen, len(val_list), fs = fs, noverlap = noverlap, metrics_dict = metrics, window = window)['SDR']
     print('Calculando métricas sobre o conjunto de teste medidas no domínio do tempo (em dB)...')
-    CRNN_curves['Test'][k] = pf.time_tests(model_CRNN, test_gen, len(test_list), fs = fs, noverlap = noverlap, metrics_dict = metrics)['SDR']
+    CRNN_curves['Test'][k] = pf.time_tests(model_CRNN, test_gen, len(test_list), fs = fs, noverlap = noverlap, metrics_dict = metrics, window = window)['SDR']
 
 print('Pronto!')
 
