@@ -11,6 +11,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import backend as K
+import tensorflow_io as tfio
 
 from tensorflow.data import Dataset as tf_ds
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
@@ -240,7 +241,7 @@ val_ds = tf_ds.from_generator(val_gen, output_signature =
                               (tf.TensorSpec(shape = (None,), dtype = tf.float32),
                                tf.TensorSpec(shape = (None,), dtype = tf.float32))) """
 
-@tf.py_function(Tout = [tf.float32, tf.float32])
+""" @tf.py_function(Tout = [tf.float32, tf.float32])
 def aux_load_func(file_pair):
     # Carrega os áudios do arquivo selecionado
     file_pair = file_pair.numpy()
@@ -248,12 +249,22 @@ def aux_load_func(file_pair):
     noisy_audio = pf.load_audio_file(file_pair[0], sample_rate = fs)
     
     clean_audio = pf.tensor(clean_audio)
-    noisy_audio = pf.tensor(clean_audio)
-    
-    clean_audio.set_shape([None,])
-    noisy_audio.set_shape([None,])
+    noisy_audio = pf.tensor(noisy_audio)
             
-    return (noisy_audio, clean_audio)
+    return (noisy_audio, clean_audio) """
+
+@tf.function
+def aux_load_func(file_pair):
+    clean_audio = tf.io.read_file(file_pair[1])
+    noisy_audio = tf.io.read_file(file_pair[0])
+    
+    clean_audio, _ = tf.audio.decode_wav(clean_audio)
+    noisy_audio, _ = tf.audio.decode_wav(noisy_audio)
+    
+    clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
+    noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
+    
+    return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
 
 @tf.py_function(Tout = [tf.TensorSpec(shape = (None, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
                         tf.TensorSpec(shape = (None, nfft//2 + 1,           1, 1), dtype = tf.float32)])
