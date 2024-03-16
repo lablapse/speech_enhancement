@@ -233,12 +233,27 @@ def val_gen():
     while True:
         yield next(ref_gen) 
 
-train_ds = tf_ds.from_generator(train_gen, output_signature = 
+""" train_ds = tf_ds.from_generator(train_gen, output_signature = 
                                 (tf.TensorSpec(shape = (None,), dtype = tf.float32),
                                  tf.TensorSpec(shape = (None,), dtype = tf.float32)))
 val_ds = tf_ds.from_generator(val_gen, output_signature = 
                               (tf.TensorSpec(shape = (None,), dtype = tf.float32),
-                               tf.TensorSpec(shape = (None,), dtype = tf.float32)))
+                               tf.TensorSpec(shape = (None,), dtype = tf.float32))) """
+
+@tf.py_function(Tout = [tf.float32, tf.float32])
+def aux_load_func(file_pair):
+    # Carrega os áudios do arquivo selecionado
+    file_pair = file_pair.numpy()
+    clean_audio = pf.load_audio_file(file_pair[1], sample_rate = fs)
+    noisy_audio = pf.load_audio_file(file_pair[0], sample_rate = fs)
+    
+    clean_audio = pf.tensor(clean_audio)
+    noisy_audio = pf.tensor(clean_audio)
+    
+    clean_audio.set_shape([None,])
+    noisy_audio.set_shape([None,])
+            
+    return (noisy_audio, clean_audio)
 
 @tf.py_function(Tout = [tf.TensorSpec(shape = (None, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
                         tf.TensorSpec(shape = (None, nfft//2 + 1,           1, 1), dtype = tf.float32)])
@@ -246,7 +261,7 @@ def aux_map_func(noisy_audio, clean_audio):
     return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
                               nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
 
-buff = 1000
+#buff = 1000
 
 def set_tensor_shapes(noisy_STFT, clean_STFT):
     noisy_STFT.set_shape((None, nfft//2 + 1, time_frames, 1))
@@ -255,6 +270,10 @@ def set_tensor_shapes(noisy_STFT, clean_STFT):
     return (noisy_STFT, clean_STFT)
 
 print('-'*50)
+train_ds = tf_ds.from_tensor_slices(train_list)
+train_ds = train_ds.shuffle(buffer_size = len(train_list), seed = None, reshuffle_each_iteration = True)
+print(train_ds.element_spec)
+train_ds = train_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
 train_ds = train_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
@@ -266,15 +285,19 @@ train_ds = train_ds.shuffle(buffer_size = buff_mult*batch_size, seed = None, res
 print(train_ds.element_spec)
 train_ds = train_ds.batch(batch_size, drop_remainder = True)
 print(train_ds.element_spec)
-train_ds = train_ds.prefetch(buffer_size = buff)
+train_ds = train_ds.prefetch(buffer_size = buff_mult)
 print(train_ds.element_spec)
+train_ds = train_ds.repeat(epochs)
 print('-'*50)
 input("Pressione \"enter\" para continuar...")
 
+val_ds   = tf_ds.from_tensor_slices(val_list)
+val_ds   = val_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.rebatch(batch_size, drop_remainder = True)
-val_ds   = val_ds.prefetch(buffer_size = buff)
+val_ds   = val_ds.prefetch(buffer_size = buff_mult)
+val_ds   = val_ds.repeat(epochs)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
 print('Total de batches de validação:   ', validation_steps )
