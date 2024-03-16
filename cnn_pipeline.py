@@ -365,7 +365,7 @@ callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience
              CSVLogger(filename=CNN_log_path, separator=',', append=False)
             ]
 
-n_workers = 1
+n_workers = 8
 history_CNN = model_CNN.fit(train_ds,
                     epochs = epochs,
                     steps_per_epoch = batches_per_epoch - 1,
