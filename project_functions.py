@@ -202,7 +202,40 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
             noisy_angle.append(np.angle(Sn))
                         
     return noisy_STFT, clean_STFT, noisy_angle, clean_angle
+    
+def simple_generator(file_list, sample_rate = 16000):
+    while True:
+        # (Re)inicializa a lista de arquivos restantes a serem carregados
+        remaining_files = set(file_list)
+        
+        while len(remaining_files) > 0:
+            # Seleciona aleatoriamente um par de arquivos da lista (com um áudio corrompido e seu respectivo áudio limpo)
+            file_pair = draw_files(remaining_files, 1)
+            # Remove o arquivo da lista (utilizando operações de conjunto)
+            remaining_files = remaining_files - set(file_pair)
+            # Carrega os áudios do arquivo selecionado
+            clean_audio = load_audio_file(file_pair[0][1], sample_rate = sample_rate)
+            noisy_audio = load_audio_file(file_pair[0][0], sample_rate = sample_rate)
             
+            yield (tensor(noisy_audio), tensor(clean_audio))
+
+def ds_map_function(noisy_audio, clean_audio, sample_rate = 16000, nperseg = 512, nfft = None, time_frames = 16,  
+                    noverlap = None, phase_aware_target = False, window = 'hann'):
+    if nfft == None:
+        nfft = nperseg
+    if noverlap == None:
+        noverlap = nperseg - nperseg//4 # == ceilling(3*nperseg/4)
+    
+    noisy_STFT, clean_STFT, _, _ = audio_pre_processing(
+                    clean_audio, noisy_audio, nperseg = nperseg, nfft = nfft, time_frames = time_frames,  
+                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target, window = window)
+    
+    # Adequa o shape dos espectrogramas (batch_size,nfft//2 + 1,time_frames,1)
+    audio_BS = np.shape(clean_STFT)[0]
+    noisy_STFT = np.reshape(noisy_STFT, (audio_BS, nfft//2 + 1, time_frames, 1))
+    clean_STFT = np.reshape(clean_STFT, (audio_BS, nfft//2 + 1,           1, 1))
+    
+    return (tensor(noisy_STFT), tensor(clean_STFT))
     
 def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, nperseg = 512, nfft = None,
                     time_frames = 16, noverlap = None, debug = False, random_batches = True, buffer_mult = 20,

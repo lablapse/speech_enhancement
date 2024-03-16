@@ -198,7 +198,7 @@ validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectr
                                                  noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto')
 
-def train_gen():
+""" def train_gen():
     ref_gen = pf.batch_generator(train_list, batch_size, total_batches = batches_per_epoch - 1, time_frames = time_frames, 
                               phase_aware_target = phase_aware, random_batches = random, sample_rate = fs, noverlap = noverlap,
                               nperseg = nperseg, buffer_mult = buff_mult, window = window)
@@ -221,7 +221,62 @@ val_ds = tf_ds.from_generator(val_gen, output_signature =
 
 buff = 20
 train_ds = train_ds.prefetch(buffer_size = buff)
-val_ds = val_ds.prefetch(buffer_size = buff)
+val_ds = val_ds.prefetch(buffer_size = buff) """
+
+def train_gen():
+    ref_gen = pf.simple_generator(train_list, sample_rate = fs)
+    while True:
+        yield next(ref_gen)
+
+def val_gen():
+    ref_gen = pf.simple_generator(val_list, sample_rate = fs)
+    while True:
+        yield next(ref_gen) 
+
+train_ds = tf_ds.from_generator(train_gen, output_signature = 
+                                (tf.TensorSpec(shape = (None,), dtype = tf.float32),
+                                 tf.TensorSpec(shape = (None,), dtype = tf.float32)))
+val_ds = tf_ds.from_generator(val_gen, output_signature = 
+                              (tf.TensorSpec(shape = (None,), dtype = tf.float32),
+                               tf.TensorSpec(shape = (None,), dtype = tf.float32)))
+
+@tf.py_function(Tout = [tf.TensorSpec(shape = (None, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
+                        tf.TensorSpec(shape = (None, nfft//2 + 1,           1, 1), dtype = tf.float32)])
+def aux_map_func(noisy_audio, clean_audio):
+    return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
+                              nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
+
+buff = 20
+
+def set_tensor_shapes(noisy_STFT, clean_STFT):
+    noisy_STFT.set_shape((None, nfft//2 + 1, time_frames, 1))
+    clean_STFT.set_shape((None, nfft//2 + 1,           1, 1))
+    
+    return (noisy_STFT, clean_STFT)
+
+print('-'*50)
+print(train_ds.element_spec)
+train_ds = train_ds.map(aux_map_func)
+print(train_ds.element_spec)
+train_ds = train_ds.map(set_tensor_shapes)
+print(train_ds.element_spec)
+train_ds = train_ds.unbatch()
+print(train_ds.element_spec)
+train_ds = train_ds.shuffle(buffer_size = buff_mult*batch_size, seed = None, reshuffle_each_iteration = True)
+print(train_ds.element_spec)
+train_ds = train_ds.batch(batch_size, drop_remainder = True)
+print(train_ds.element_spec)
+train_ds = train_ds.prefetch(buffer_size = buff)
+print(train_ds.element_spec)
+print('-'*50)
+input("Pressione \"enter\" para continuar...")
+
+val_ds   = val_ds.map(aux_map_func)
+val_ds   = val_ds.map(set_tensor_shapes)
+val_ds   = val_ds.unbatch()
+val_ds   = val_ds.shuffle(buffer_size = buff_mult*batch_size, seed = None, reshuffle_each_iteration = True)
+val_ds   = val_ds.batch(batch_size, drop_remainder = True)
+val_ds   = val_ds.prefetch(buffer_size = buff)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
 print('Total de batches de validação:   ', validation_steps )
