@@ -246,7 +246,7 @@ def aux_map_func(noisy_audio, clean_audio):
     return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
                               nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
 
-buff = 20
+buff = 1000
 
 def set_tensor_shapes(noisy_STFT, clean_STFT):
     noisy_STFT.set_shape((None, nfft//2 + 1, time_frames, 1))
@@ -256,9 +256,9 @@ def set_tensor_shapes(noisy_STFT, clean_STFT):
 
 print('-'*50)
 print(train_ds.element_spec)
-train_ds = train_ds.map(aux_map_func)
+train_ds = train_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
-train_ds = train_ds.map(set_tensor_shapes)
+train_ds = train_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
 train_ds = train_ds.unbatch()
 print(train_ds.element_spec)
@@ -271,11 +271,9 @@ print(train_ds.element_spec)
 print('-'*50)
 input("Pressione \"enter\" para continuar...")
 
-val_ds   = val_ds.map(aux_map_func)
-val_ds   = val_ds.map(set_tensor_shapes)
-val_ds   = val_ds.unbatch()
-val_ds   = val_ds.shuffle(buffer_size = buff_mult*batch_size, seed = None, reshuffle_each_iteration = True)
-val_ds   = val_ds.batch(batch_size, drop_remainder = True)
+val_ds   = val_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
+val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
+val_ds   = val_ds.rebatch(batch_size, drop_remainder = True)
 val_ds   = val_ds.prefetch(buffer_size = buff)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
