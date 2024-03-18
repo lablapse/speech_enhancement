@@ -199,60 +199,6 @@ validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectr
                                                  noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto')
 
-""" def train_gen():
-    ref_gen = pf.batch_generator(train_list, batch_size, total_batches = batches_per_epoch - 1, time_frames = time_frames, 
-                              phase_aware_target = phase_aware, random_batches = random, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
-    while True:
-        yield next(ref_gen)
-
-def val_gen():
-    ref_gen = pf.batch_generator(val_list, batch_size, total_batches = validation_steps - 1, time_frames = time_frames,
-                              phase_aware_target = phase_aware, random_batches = False, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
-    while True:
-        yield next(ref_gen) 
-
-train_ds = tf_ds.from_generator(train_gen, output_signature = 
-                                (tf.TensorSpec(shape = (batch_size, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
-                                 tf.TensorSpec(shape = (batch_size, nfft//2 + 1,           1, 1), dtype = tf.float32)))
-val_ds = tf_ds.from_generator(val_gen, output_signature = 
-                              (tf.TensorSpec(shape = (batch_size, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
-                               tf.TensorSpec(shape = (batch_size, nfft//2 + 1,           1, 1), dtype = tf.float32)))
-
-buff = 20
-train_ds = train_ds.prefetch(buffer_size = buff)
-val_ds = val_ds.prefetch(buffer_size = buff) """
-
-def train_gen():
-    ref_gen = pf.simple_generator(train_list, sample_rate = fs)
-    while True:
-        yield next(ref_gen)
-
-def val_gen():
-    ref_gen = pf.simple_generator(val_list, sample_rate = fs)
-    while True:
-        yield next(ref_gen) 
-
-""" train_ds = tf_ds.from_generator(train_gen, output_signature = 
-                                (tf.TensorSpec(shape = (None,), dtype = tf.float32),
-                                 tf.TensorSpec(shape = (None,), dtype = tf.float32)))
-val_ds = tf_ds.from_generator(val_gen, output_signature = 
-                              (tf.TensorSpec(shape = (None,), dtype = tf.float32),
-                               tf.TensorSpec(shape = (None,), dtype = tf.float32))) """
-
-""" @tf.py_function(Tout = [tf.float32, tf.float32])
-def aux_load_func(file_pair):
-    # Carrega os áudios do arquivo selecionado
-    file_pair = file_pair.numpy()
-    clean_audio = pf.load_audio_file(file_pair[1], sample_rate = fs)
-    noisy_audio = pf.load_audio_file(file_pair[0], sample_rate = fs)
-    
-    clean_audio = pf.tensor(clean_audio)
-    noisy_audio = pf.tensor(noisy_audio)
-            
-    return (noisy_audio, clean_audio) """
-
 @tf.function
 def aux_load_func(file_pair):
     clean_audio = tf.io.read_file(file_pair[1])
@@ -261,18 +207,20 @@ def aux_load_func(file_pair):
     clean_audio, _ = tf.audio.decode_wav(clean_audio)
     noisy_audio, _ = tf.audio.decode_wav(noisy_audio)
     
+    return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
+
+@tf.function
+def aux_resample_func(noisy_audio,clean_audio):
     clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
     noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
     
-    return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
+    return (noisy_audio, clean_audio)
 
 @tf.py_function(Tout = [tf.TensorSpec(shape = (None, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
                         tf.TensorSpec(shape = (None, nfft//2 + 1,           1, 1), dtype = tf.float32)])
 def aux_map_func(noisy_audio, clean_audio):
     return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
                               nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
-
-#buff = 1000
 
 def set_tensor_shapes(noisy_STFT, clean_STFT):
     noisy_STFT.set_shape((None, nfft//2 + 1, time_frames, 1))
@@ -285,6 +233,8 @@ train_ds = tf_ds.from_tensor_slices(train_list)
 train_ds = train_ds.shuffle(buffer_size = len(train_list), seed = None, reshuffle_each_iteration = True)
 print(train_ds.element_spec)
 train_ds = train_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
+print(train_ds.element_spec)
+train_ds = train_ds.map(aux_resample_func, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
 train_ds = train_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
 print(train_ds.element_spec)
@@ -304,6 +254,7 @@ input("Pressione \"enter\" para continuar...")
 
 val_ds   = tf_ds.from_tensor_slices(val_list)
 val_ds   = val_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
+val_ds   = val_ds.map(aux_resample_func, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
 val_ds   = val_ds.rebatch(batch_size, drop_remainder = True)
@@ -359,7 +310,7 @@ if not os.path.exists(log_folder):
 
 # %%
 callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=10),
-             ReduceLROnPlateau(monitor='val_SDR', factor=0.5, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
+             ReduceLROnPlateau(monitor='val_SDR', factor=0.75, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
              #ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_format='tf', monitor='val_SDR', mode='max'),
              ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_weights_only = True, monitor='val_SDR', mode='max'),
              CSVLogger(filename=CNN_log_path, separator=',', append=False)

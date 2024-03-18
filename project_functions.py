@@ -15,16 +15,16 @@ from scipy import signal
 from tqdm import tqdm
 
 import tensorflow as tf
-from multiprocessing import Lock
 
 from tensorflow.keras import Model
-from tensorflow.keras.utils import register_keras_serializable, plot_model
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten, Reshape, Input, Add
-from tensorflow.keras.layers import Conv1D, Conv2D, MaxPooling2D, Conv2DTranspose, Activation, ReLU
-from tensorflow.keras.layers import BatchNormalization, UnitNormalization
-from tensorflow.keras.layers import GRU
 from tensorflow.keras import backend as K
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Reshape, Input, Add
+from tensorflow.keras.layers import Conv2D, Conv2DTranspose, Activation, ReLU
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import GRU
+from tensorflow.keras.constraints import MinMaxNorm
+
 
 #################################################################################################################
 # GPU                                                                                                           #
@@ -425,16 +425,16 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             x = Add()([skip_vertix, x])
             # Salva o próximo ponto de origem dos dados da conexão skip
             skip_vertix = x
-        x = Conv2D(18, (9, length),padding='valid', use_bias = False, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2D(18, (9, length), padding='valid', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
-        x = Conv2D(30, (5, 1),padding='same', use_bias = False,**kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2D(30, (5, 1),padding='same', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False,**kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
-        x = Conv2DTranspose(length, (9, 1),padding='valid', use_bias = False, **kwargs)(x)
-        x = BatchNormalization(momentum = 0.99, epsilon = 1e-6)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
+        x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
         #x = Dropout(0.1)(x)
         if k < n_reps - 1:
