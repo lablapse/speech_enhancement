@@ -23,7 +23,7 @@ from tensorflow.keras.layers import Dense, Dropout, Reshape, Input, Add
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, Activation, ReLU
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import GRU
-from tensorflow.keras.constraints import MinMaxNorm
+from tensorflow.keras.constraints import MinMaxNorm, UnitNorm
 
 
 #################################################################################################################
@@ -165,7 +165,7 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
                                 nfft = nfft, noverlap = noverlap, window = window)
         f, t, noisy_Zxx = signal.stft(noisy_audio, sample_rate, nperseg = nperseg,
                                 nfft = nfft, noverlap = noverlap, window = window)
-                
+    
     # Número de espectrogramas a serem extraídos do sinal original
     T = len(t)//time_frames
     # Inicializa arrays auxiliares para armazenar as divisões do espectrograma
@@ -202,22 +202,6 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
             noisy_angle.append(np.angle(Sn))
                         
     return noisy_STFT, clean_STFT, noisy_angle, clean_angle
-    
-def simple_generator(file_list, sample_rate = 16000):
-    while True:
-        # (Re)inicializa a lista de arquivos restantes a serem carregados
-        remaining_files = set(file_list)
-        
-        while len(remaining_files) > 0:
-            # Seleciona aleatoriamente um par de arquivos da lista (com um áudio corrompido e seu respectivo áudio limpo)
-            file_pair = draw_files(remaining_files, 1)
-            # Remove o arquivo da lista (utilizando operações de conjunto)
-            remaining_files = remaining_files - set(file_pair)
-            # Carrega os áudios do arquivo selecionado
-            clean_audio = load_audio_file(file_pair[0][1], sample_rate = sample_rate)
-            noisy_audio = load_audio_file(file_pair[0][0], sample_rate = sample_rate)
-            
-            yield (tensor(noisy_audio), tensor(clean_audio))
 
 def ds_map_function(noisy_audio, clean_audio, sample_rate = 16000, nperseg = 512, nfft = None, time_frames = 16,  
                     noverlap = None, phase_aware_target = False, window = 'hann'):
@@ -425,18 +409,18 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
             x = Add()([skip_vertix, x])
             # Salva o próximo ponto de origem dos dados da conexão skip
             skip_vertix = x
-        x = Conv2D(18, (9, length), padding='valid', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
+        x = Conv2D(18, (9, length), padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        #x = Dropout(0.1)(x)
-        x = Conv2D(30, (5, 1),padding='same', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False,**kwargs)(x)
+        x = Dropout(0.05)(x)
+        x = Conv2D(30, (5, 1),padding='same', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False,**kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        #x = Dropout(0.1)(x)
-        x = Conv2DTranspose(length, (9, 1),padding='valid', kernel_constraint = MinMaxNorm(-1, 1, axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
+        x = Dropout(0.05)(x)
+        x = Conv2DTranspose(length, (9, 1),padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        #x = Dropout(0.1)(x)
+        x = Dropout(0.05)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)

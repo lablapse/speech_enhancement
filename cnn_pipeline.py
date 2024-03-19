@@ -209,10 +209,19 @@ def aux_load_func(file_pair):
     
     return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
 
+#@tf.py_function(Tout = [tf.TensorSpec(shape = (None, ), dtype = tf.float32),
+#                        tf.TensorSpec(shape = (None, ), dtype = tf.float32)])
 @tf.function
 def aux_resample_func(noisy_audio,clean_audio):
     clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
     noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
+    
+    return (noisy_audio, clean_audio)
+
+@tf.function
+def set_tensor_shapes(noisy_audio, clean_audio):
+    noisy_audio.set_shape((None, ))
+    clean_audio.set_shape((None, ))
     
     return (noisy_audio, clean_audio)
 
@@ -222,9 +231,34 @@ def aux_map_func(noisy_audio, clean_audio):
     return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
                               nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
 
-def set_tensor_shapes(noisy_STFT, clean_STFT):
-    noisy_STFT.set_shape((None, nfft//2 + 1, time_frames, 1))
-    clean_STFT.set_shape((None, nfft//2 + 1,           1, 1))
+@tf.function
+def aux_stft_map(noisy_audio, clean_audio):
+    noisy_STFT = tf.signal.stft(noisy_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
+                                window_fn=tf.signal.hann_window, pad_end=True)
+    clean_STFT = tf.signal.stft(clean_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
+                                window_fn=tf.signal.hann_window, pad_end=True)
+    
+    # Extrair somente magnitude da STFT
+    noisy_STFT = tf.math.abs(noisy_STFT)
+    clean_STFT = tf.math.abs(clean_STFT)
+    
+    # Verificar se isso produz o resultado desejado (Possivelmente seja necessário alterar o eixo selecionado)
+    # Produz os tensores contendo os espectrogramas de entrada e saída da rede
+    noisy_STFT_batch = tf.signal.frame(noisy_STFT, time_frames, 1, axis = 0)
+    clean_STFT_batch = tf.signal.frame(clean_STFT,           1, 1, axis = 0)
+    # Remove os primeiros (time_frames - 1) frames de clean_STFT_bacth
+    clean_STFT_batch = clean_STFT_batch[(time_frames - 1):]
+    
+    noisy_STFT_batch = tf.expand_dims(tf.transpose(noisy_STFT_batch, perm = [0,2,1]), axis = -1)
+    clean_STFT_batch = tf.expand_dims(tf.transpose(clean_STFT_batch, perm = [0,2,1]), axis = -1)
+    
+    return (noisy_STFT_batch, clean_STFT_batch)
+
+@tf.function
+def aux_transpose(noisy_STFT, clean_STFT):
+    # Transpõe os índices para compatibilidade com o código pré-existente (corrigir em verões futuras)
+    noisy_STFT = tf.transpose(noisy_STFT, perm = [1,0])
+    clean_STFT = tf.transpose(clean_STFT, perm = [1,0])
     
     return (noisy_STFT, clean_STFT)
 
@@ -232,13 +266,13 @@ print('-'*50)
 train_ds = tf_ds.from_tensor_slices(train_list)
 train_ds = train_ds.shuffle(buffer_size = len(train_list), seed = None, reshuffle_each_iteration = True)
 print(train_ds.element_spec)
-train_ds = train_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
+train_ds = train_ds.map(aux_load_func, num_parallel_calls = 4 , deterministic = False)
 print(train_ds.element_spec)
-train_ds = train_ds.map(aux_resample_func, num_parallel_calls = 8 , deterministic = False)
+train_ds = train_ds.map(aux_resample_func, num_parallel_calls = 4 , deterministic = False)
 print(train_ds.element_spec)
-train_ds = train_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
+train_ds = train_ds.map(set_tensor_shapes, num_parallel_calls = 4 , deterministic = False)
 print(train_ds.element_spec)
-train_ds = train_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
+train_ds = train_ds.map(aux_stft_map, num_parallel_calls = 4 , deterministic = False)
 print(train_ds.element_spec)
 train_ds = train_ds.unbatch()
 print(train_ds.element_spec)
@@ -253,10 +287,10 @@ print('-'*50)
 input("Pressione \"enter\" para continuar...")
 
 val_ds   = tf_ds.from_tensor_slices(val_list)
-val_ds   = val_ds.map(aux_load_func, num_parallel_calls = 8 , deterministic = False)
-val_ds   = val_ds.map(aux_resample_func, num_parallel_calls = 8 , deterministic = False)
-val_ds   = val_ds.map(aux_map_func, num_parallel_calls = 8 , deterministic = False)
-val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 8 , deterministic = False)
+val_ds   = val_ds.map(aux_load_func, num_parallel_calls = 4 , deterministic = False)
+val_ds   = val_ds.map(aux_resample_func, num_parallel_calls = 4 , deterministic = False)
+val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 4 , deterministic = False)
+val_ds   = val_ds.map(aux_stft_map, num_parallel_calls = 4 , deterministic = False)
 val_ds   = val_ds.rebatch(batch_size, drop_remainder = True)
 val_ds   = val_ds.prefetch(buffer_size = buff_mult)
 val_ds   = val_ds.repeat(epochs)
