@@ -540,7 +540,8 @@ def CRNN_model(input_shape):
             Activation('relu'),
             Dropout(0.3),
             Reshape((1, -1)),
-            Dense(input_shape[0], activation='sigmoid'),
+            Dense(input_shape[0]),
+            ReLU(negative_slope=0.01),
             Reshape((-1, 1, 1))
         ]
     )

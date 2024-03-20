@@ -33,7 +33,7 @@ import project_functions as pf
 
 # %%
 # Define a GPU visível (0 -> 3080; 1 -> 3090)
-pf.set_gpu(0)
+pf.set_gpu(1)
 
 # Carrega o arquivo de configurações do teste atual
 with open('./config_files/CurrentTest.yml', 'r') as file:
@@ -203,7 +203,7 @@ model_CRNN.load_weights(CRNN_checkpoint_path)
 # %%
 # Reduz o dataset (samples_per_SNR = -1 -> dataset completo)
 
-train_samples_per_SNR = 1000
+train_samples_per_SNR = -1
 val_samples_per_SNR = -1
 test_samples_per_SNR = -1
 
