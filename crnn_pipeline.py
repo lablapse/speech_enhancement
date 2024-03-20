@@ -255,7 +255,7 @@ callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience
 history_CRNN = model_CRNN.fit(train_ds,
                     batch_size = batch_size,
                     epochs = epochs,
-                    steps_per_epoch = batches_per_epoch,
+                    steps_per_epoch = batches_per_epoch - 1, # -1 devido ao descarte do batch incompleto
                     callbacks = callbacks,
                     validation_data = val_ds,
                     validation_steps = len(val_list),

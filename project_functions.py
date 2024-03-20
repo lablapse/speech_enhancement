@@ -208,12 +208,9 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
 
 # Define um dataset do tensorflow de acordo com a configurações fornecidas
 # Pendências:
-#   > Implementar configuração de Phase_Aware
-#   > Implementar configuração de geração de batches para reconstrução de sinais no tempo (com informação de fase no batch)
 #   > Implementar configuração de janelamento
-# Peculiaridades:
-#   > Existem divergências do espectro produzido pela biblioteca scipy, principalmente com relação à amplitude dos espectros,
-#     entretanto é possível reconstruir um sinal no tempo com a istft do scipy a partir de um espectrograma produzido pelo tensorflow
+#   > Substituir parâmetro train_ds por training
+#   > Ao treinar a CRNN a última época é interrompida por falta de dados, investigar motivo
 def build_tf_dataset(file_list, train_ds = True, workers = 1, nperseg = 256, noverlap = 192, 
                      fs = 8000, time_frames = 8, buffer = 100, batch_size = 512, epochs = 10,
                      phase_aware = False, use_phase = False):
@@ -481,15 +478,9 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
     kwargs = {'kernel_initializer': 'glorot_uniform',
               'bias_initializer': 'zeros'}
     
-    # Varíavel com o ponto de origem da próxima conexão skip a ser realizada 
-    skip_vertix = x 
-    
     for k in range(n_reps):
-        if skip and k > 0:
-            # Realiza a conexão skip
-            x = Add()([skip_vertix, x])
-            # Salva o próximo ponto de origem dos dados da conexão skip
-            skip_vertix = x
+        # Varíavel com o ponto de origem da próxima conexão skip a ser realizada 
+        skip_vertix = x 
         x = Conv2D(18, (9, length), padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
@@ -505,6 +496,9 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
+        if skip and k > 0:
+            # Realiza a conexão skip
+            x = Add()([skip_vertix, x])
     
     x = Conv2D(1, (input_shape[0], 1), padding='same',**kwargs)(x)
     x = ReLU(negative_slope=0.01)(x)
@@ -519,24 +513,24 @@ def CRNN_model(input_shape):
     model_CRNN = Sequential(
         [
             Input(shape = input_shape),
-            Conv2D(90, kernel_size=(9, 1), strides=(3, 1), padding='valid',use_bias=True, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
-            BatchNormalization(),  
+            Conv2D(90, kernel_size=(9, 1), strides=(3, 1), padding='valid',use_bias=False, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
+            BatchNormalization(momentum = 0.997, epsilon = 1e-6),  
             Activation('relu'),
             Dropout(0.3),
-            Conv2D(90, kernel_size=(3, 2), strides=(2, 1), padding='valid',use_bias=True, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
-            BatchNormalization(),
+            Conv2D(90, kernel_size=(3, 2), strides=(2, 1), padding='valid',use_bias=False, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
+            BatchNormalization(momentum = 0.997, epsilon = 1e-6),
             Activation('relu'),
             Dropout(0.3),
             Reshape((time_frames-1, -1)),
             GRU(256, return_sequences=True),
             GRU(256, return_sequences=True),
             Reshape((256,time_frames-1,1)),
-            Conv2DTranspose(8, (5, 1), strides=(2, 1), padding='valid',use_bias=True, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
-            BatchNormalization(),
+            Conv2DTranspose(8, (5, 1), strides=(2, 1), padding='valid',use_bias=False, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
+            BatchNormalization(momentum = 0.997, epsilon = 1e-6),
             Activation('relu'),
             Dropout(0.3),
-            Conv2DTranspose(1, (3, 1), strides=(1, 1),padding='valid',use_bias=True, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
-            BatchNormalization(),
+            Conv2DTranspose(1, (3, 1), strides=(1, 1),padding='valid',use_bias=False, kernel_initializer='glorot_uniform',bias_initializer='zeros'),
+            BatchNormalization(momentum = 0.997, epsilon = 1e-6),
             Activation('relu'),
             Dropout(0.3),
             Reshape((1, -1)),

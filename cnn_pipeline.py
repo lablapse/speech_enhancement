@@ -260,10 +260,10 @@ callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience
 n_workers = 1
 history_CNN = model_CNN.fit(train_ds,
                     epochs = epochs,
-                    steps_per_epoch = batches_per_epoch - 1, # - 1??????
+                    steps_per_epoch = batches_per_epoch - 1, # -1 devido ao descarte do batch incompleto
                     callbacks = callbacks,
                     validation_data = val_ds,
-                    validation_steps = len(val_list), # - 1?????
+                    validation_steps = len(val_list), 
                     verbose = 1)
 
 plt.subplots(1, 2, figsize = (10,5));
