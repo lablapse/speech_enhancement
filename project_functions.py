@@ -599,22 +599,22 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
 # e espectros do áudio limpo
 def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
     # Calcula a quantidade de amostras usadas para efetuar o janelamento (com base nas dimensões do batch)
-    nperseg = 2*(np.shape(batch[0])[1] - 1)    
+    nperseg = 2*(batch[0].shape[1] - 1)    
     if noverlap == None:
         noverlap = nperseg - nperseg//4
     # --------- Noisy and Predicted Signals --------
     noisy_STFT_batch = batch[0]
     noisy_angle_batch = batch[2][:,:,-1,0]
-    noisy_angle_batch = np.reshape(noisy_angle_batch, (-1, nperseg//2 + 1))
+    noisy_angle_batch = tf.complex(0.0,tf.reshape(noisy_angle_batch, (-1, nperseg//2 + 1)))
         
     pred_STFT_abs = model(noisy_STFT_batch, training = False)  # Chama o modelo diretamente, teoricamente evita os memory leaks de model.predict()
-    pred_STFT_abs = np.reshape(pred_STFT_abs, (-1, nperseg//2 + 1))
+    pred_STFT_abs = tf.complex(tf.reshape(pred_STFT_abs, (-1, nperseg//2 + 1)), 0.0)
     
     noisy_STFT_abs = batch[0][:,:,-1,0]
-    noisy_STFT_abs = np.reshape(noisy_STFT_abs, (-1, nperseg//2 + 1))
+    noisy_STFT_abs = tf.complex(tf.reshape(noisy_STFT_abs, (-1, nperseg//2 + 1)), 0.0)
     
-    pred_STFT = pred_STFT_abs*np.exp(1j*noisy_angle_batch)
-    noisy_STFT = noisy_STFT_abs*np.exp(1j*noisy_angle_batch)
+    pred_STFT = pred_STFT_abs*tf.math.exp(noisy_angle_batch)
+    noisy_STFT = noisy_STFT_abs*tf.math.exp(noisy_angle_batch)
     
     pred_signal  = tf.signal.inverse_stft(pred_STFT , frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
     noisy_signal = tf.signal.inverse_stft(noisy_STFT, frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
@@ -622,10 +622,10 @@ def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
     # --------- Clean Signal --------    
     clean_STFT_abs = batch[1]
     clean_angle = batch[3]
-    clean_STFT_abs = np.reshape(clean_STFT_abs, (-1, nperseg//2 + 1))
-    clean_angle = np.reshape(clean_angle, (-1, nperseg//2 + 1))
+    clean_STFT_abs = tf.complex(tf.reshape(clean_STFT_abs, (-1, nperseg//2 + 1)), 0.0)
+    clean_angle = tf.complex(0.0,tf.reshape(clean_angle, (-1, nperseg//2 + 1)))
     
-    clean_STFT = clean_STFT_abs*np.exp(1j*clean_angle)
+    clean_STFT = clean_STFT_abs*tf.math.exp(clean_angle)
     
     clean_signal = tf.signal.inverse_stft(clean_STFT, frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
     
