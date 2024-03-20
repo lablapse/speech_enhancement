@@ -232,12 +232,22 @@ for k in range(len(SNR_list)):
                             draw_function = pf.draw_files)
     
 
-    train_gen = pf.full_audio_batch_generator(train_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
+    """ train_gen = pf.full_audio_batch_generator(train_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
                                               sample_rate = fs, phase_aware_target = phase_aware, window = window)
     val_gen = pf.full_audio_batch_generator(val_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
                                             sample_rate = fs, phase_aware_target = phase_aware, window = window)
     test_gen = pf.full_audio_batch_generator(test_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
-                                             sample_rate = fs, phase_aware_target = phase_aware, window = window)
+                                             sample_rate = fs, phase_aware_target = phase_aware, window = window) """
+    
+    train_ds = pf.build_tf_dataset(train_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
+    val_ds   = pf.build_tf_dataset(val_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
+    test_ds  = pf.build_tf_dataset(test_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
+    train_gen = train_ds.as_numpy_iterator()
+    val_gen   = val_ds.as_numpy_iterator()
+    test_gen  = test_ds.as_numpy_iterator()
 
     print('Calculando métricas sobre o conjunto de treino medidas no domínio do tempo (em dB)...')
     CNN_curves['Train'][k] = pf.time_tests(model_CNN, train_gen, len(train_list), fs = fs, noverlap = noverlap, metrics_dict = metrics, window = window)['SDR']

@@ -199,101 +199,12 @@ validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectr
                                                  noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto')
 
-@tf.function
-def aux_load_func(file_pair):
-    clean_audio = tf.io.read_file(file_pair[1])
-    noisy_audio = tf.io.read_file(file_pair[0])
-    
-    clean_audio, _ = tf.audio.decode_wav(clean_audio)
-    noisy_audio, _ = tf.audio.decode_wav(noisy_audio)
-    
-    return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
-
-#@tf.py_function(Tout = [tf.TensorSpec(shape = (None, ), dtype = tf.float32),
-#                        tf.TensorSpec(shape = (None, ), dtype = tf.float32)])
-@tf.function
-def aux_resample_func(noisy_audio,clean_audio):
-    clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
-    noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
-    
-    return (noisy_audio, clean_audio)
-
-@tf.function
-def set_tensor_shapes(noisy_audio, clean_audio):
-    noisy_audio.set_shape((None, ))
-    clean_audio.set_shape((None, ))
-    
-    return (noisy_audio, clean_audio)
-
-@tf.py_function(Tout = [tf.TensorSpec(shape = (None, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
-                        tf.TensorSpec(shape = (None, nfft//2 + 1,           1, 1), dtype = tf.float32)])
-def aux_map_func(noisy_audio, clean_audio):
-    return pf.ds_map_function(noisy_audio.numpy(), clean_audio.numpy(), sample_rate = fs, nperseg = nperseg, 
-                              nfft = nfft, time_frames = time_frames, noverlap = noverlap, phase_aware_target = phase_aware, window = window)
-
-@tf.function
-def aux_stft_map(noisy_audio, clean_audio):
-    noisy_STFT = tf.signal.stft(noisy_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
-                                window_fn=tf.signal.hann_window, pad_end=True)
-    clean_STFT = tf.signal.stft(clean_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
-                                window_fn=tf.signal.hann_window, pad_end=True)
-    
-    # Extrair somente magnitude da STFT
-    noisy_STFT = tf.math.abs(noisy_STFT)
-    clean_STFT = tf.math.abs(clean_STFT)
-    
-    # Verificar se isso produz o resultado desejado (Possivelmente seja necessário alterar o eixo selecionado)
-    # Produz os tensores contendo os espectrogramas de entrada e saída da rede
-    noisy_STFT_batch = tf.signal.frame(noisy_STFT, time_frames, 1, axis = 0)
-    clean_STFT_batch = tf.signal.frame(clean_STFT,           1, 1, axis = 0)
-    # Remove os primeiros (time_frames - 1) frames de clean_STFT_bacth
-    clean_STFT_batch = clean_STFT_batch[(time_frames - 1):]
-    
-    noisy_STFT_batch = tf.expand_dims(tf.transpose(noisy_STFT_batch, perm = [0,2,1]), axis = -1)
-    clean_STFT_batch = tf.expand_dims(tf.transpose(clean_STFT_batch, perm = [0,2,1]), axis = -1)
-    
-    return (noisy_STFT_batch, clean_STFT_batch)
-
-@tf.function
-def aux_transpose(noisy_STFT, clean_STFT):
-    # Transpõe os índices para compatibilidade com o código pré-existente (corrigir em verões futuras)
-    noisy_STFT = tf.transpose(noisy_STFT, perm = [1,0])
-    clean_STFT = tf.transpose(clean_STFT, perm = [1,0])
-    
-    return (noisy_STFT, clean_STFT)
-
-print('-'*50)
-train_ds = tf_ds.from_tensor_slices(train_list)
-train_ds = train_ds.shuffle(buffer_size = len(train_list), seed = None, reshuffle_each_iteration = True)
-print(train_ds.element_spec)
-train_ds = train_ds.map(aux_load_func, num_parallel_calls = 4 , deterministic = False)
-print(train_ds.element_spec)
-train_ds = train_ds.map(aux_resample_func, num_parallel_calls = 4 , deterministic = False)
-print(train_ds.element_spec)
-train_ds = train_ds.map(set_tensor_shapes, num_parallel_calls = 4 , deterministic = False)
-print(train_ds.element_spec)
-train_ds = train_ds.map(aux_stft_map, num_parallel_calls = 4 , deterministic = False)
-print(train_ds.element_spec)
-train_ds = train_ds.unbatch()
-print(train_ds.element_spec)
-train_ds = train_ds.shuffle(buffer_size = buff_mult*batch_size, seed = None, reshuffle_each_iteration = True)
-print(train_ds.element_spec)
-train_ds = train_ds.batch(batch_size, drop_remainder = True)
-print(train_ds.element_spec)
-train_ds = train_ds.prefetch(buffer_size = buff_mult)
-print(train_ds.element_spec)
-train_ds = train_ds.repeat(epochs)
-print('-'*50)
-input("Pressione \"enter\" para continuar...")
-
-val_ds   = tf_ds.from_tensor_slices(val_list)
-val_ds   = val_ds.map(aux_load_func, num_parallel_calls = 4 , deterministic = False)
-val_ds   = val_ds.map(aux_resample_func, num_parallel_calls = 4 , deterministic = False)
-val_ds   = val_ds.map(set_tensor_shapes, num_parallel_calls = 4 , deterministic = False)
-val_ds   = val_ds.map(aux_stft_map, num_parallel_calls = 4 , deterministic = False)
-val_ds   = val_ds.rebatch(batch_size, drop_remainder = True)
-val_ds   = val_ds.prefetch(buffer_size = buff_mult)
-val_ds   = val_ds.repeat(epochs)
+train_ds = pf.build_tf_dataset(train_list, train_ds = True, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                               fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size, 
+                               epochs = epochs, phase_aware = phase_aware, use_phase = False)
+val_ds   = pf.build_tf_dataset(val_list , train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                               fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size,
+                               epochs = epochs, phase_aware = phase_aware, use_phase = False)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
 print('Total de batches de validação:   ', validation_steps )
@@ -350,16 +261,13 @@ callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience
              CSVLogger(filename=CNN_log_path, separator=',', append=False)
             ]
 
-n_workers = 8
+n_workers = 1
 history_CNN = model_CNN.fit(train_ds,
                     epochs = epochs,
-                    steps_per_epoch = batches_per_epoch - 1,
+                    steps_per_epoch = batches_per_epoch - 1, # - 1??????
                     callbacks = callbacks,
                     validation_data = val_ds,
-                    validation_steps = validation_steps - 1,
-                    max_queue_size = 10*n_workers,
-                    workers = n_workers,
-                    use_multiprocessing = (n_workers > 1),
+                    validation_steps = len(val_list), # - 1?????
                     verbose = 1)
 
 plt.subplots(1, 2, figsize = (10,5));

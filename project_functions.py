@@ -15,6 +15,8 @@ from scipy import signal
 from tqdm import tqdm
 
 import tensorflow as tf
+from tensorflow.data import Dataset as tf_ds
+import tensorflow_io as tfio
 
 from tensorflow.keras import Model
 from tensorflow.keras import backend as K
@@ -24,6 +26,7 @@ from tensorflow.keras.layers import Conv2D, Conv2DTranspose, Activation, ReLU
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import GRU
 from tensorflow.keras.constraints import MinMaxNorm, UnitNorm
+
 
 
 #################################################################################################################
@@ -203,23 +206,101 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
                         
     return noisy_STFT, clean_STFT, noisy_angle, clean_angle
 
-def ds_map_function(noisy_audio, clean_audio, sample_rate = 16000, nperseg = 512, nfft = None, time_frames = 16,  
-                    noverlap = None, phase_aware_target = False, window = 'hann'):
-    if nfft == None:
-        nfft = nperseg
-    if noverlap == None:
-        noverlap = nperseg - nperseg//4 # == ceilling(3*nperseg/4)
+# Define um dataset do tensorflow de acordo com a configurações fornecidas
+# Pendências:
+#   > Implementar configuração de Phase_Aware
+#   > Implementar configuração de geração de batches para reconstrução de sinais no tempo (com informação de fase no batch)
+#   > Implementar configuração de janelamento
+# Peculiaridades:
+#   > Existem divergências do espectro produzido pela biblioteca scipy, principalmente com relação à amplitude dos espectros,
+#     entretanto é possível reconstruir um sinal no tempo com a istft do scipy a partir de um espectrograma produzido pelo tensorflow
+def build_tf_dataset(file_list, train_ds = True, workers = 1, nperseg = 256, noverlap = 192, 
+                     fs = 8000, time_frames = 8, buffer = 100, batch_size = 512, epochs = 10,
+                     phase_aware = False, use_phase = False):
+    # ---------------------------------- Define as funções necessárias ---------------------------------------------------------
+    @tf.function
+    def aux_load_func(file_pair):
+        clean_audio = tf.io.read_file(file_pair[1])
+        noisy_audio = tf.io.read_file(file_pair[0])
+        
+        clean_audio, _ = tf.audio.decode_wav(clean_audio)
+        noisy_audio, _ = tf.audio.decode_wav(noisy_audio)
+        
+        clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
+        noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
+        
+        return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
+
+    @tf.function
+    def set_tensor_shapes(noisy_audio, clean_audio):
+        noisy_audio.set_shape((None, ))
+        clean_audio.set_shape((None, ))
+        
+        return (noisy_audio, clean_audio)
+
+    @tf.function
+    def aux_stft_map(noisy_audio, clean_audio):
+        noisy_STFT = tf.signal.stft(noisy_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
+                                    window_fn=tf.signal.hann_window, pad_end=True)
+        clean_STFT = tf.signal.stft(clean_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
+                                    window_fn=tf.signal.hann_window, pad_end=True)
+        
+        # Produz os tensores contendo os espectrogramas de entrada e saída da rede
+        if phase_aware:
+            # Determina o espectrograma limpo (target) corrigindo a amplitude de acordo com a regra "phase aware"
+            #   Tal regra faz o modelo aprender a ignorar (reduzir a amplitude) de bins de frequência cuja 
+            #   diferença de ângulo (predita pelo modelo) entre o sinal limpo e ruidoso seja muito alta, 
+            #   melhorando a qualidade do sinal. A regra é dada por |Sp| = max(|Sc|*cos(Theta_c - Theta_n), 0)
+            clean_STFT_abs = tf.math.real(clean_STFT*tf.math.conj(noisy_STFT))/(tf.math.abs(noisy_STFT) + 1e-3) # == |Sc|*cos(Theta_c - Theta_n)
+            # Zera completamente a amplitude de qualquer bin com diferença de fase > 90°
+            #clean_STFT_abs = clean_STFT_abs*tf.cast(clean_STFT_abs > 0, tf.float32)
+            clean_STFT_abs = tf.math.maximum(clean_STFT_abs, 0) + 1e-8
+        else:
+            clean_STFT_abs = tf.math.abs(clean_STFT)
+        
+        noisy_STFT_batch = tf.signal.frame(noisy_STFT, time_frames, 1, axis = 0)
+        clean_STFT_batch = tf.signal.frame(clean_STFT,           1, 1, axis = 0)
+        clean_STFT_abs   = tf.signal.frame(clean_STFT_abs,       1, 1, axis = 0)
+        # Remove os primeiros (time_frames - 1) frames de clean_STFT_batch e clean_STFT_abs
+        clean_STFT_batch = clean_STFT_batch[(time_frames - 1):]
+        clean_STFT_abs   = clean_STFT_abs[(time_frames - 1):]
+        
+        # Transpõe os índices para compatibilidade com o código pré-existente
+        # Também adiciona uma dimensão para os canais do espectrograma (apenas 1 canal)
+        noisy_STFT_batch = tf.expand_dims(tf.transpose(noisy_STFT_batch, perm = [0,2,1]), axis = -1)
+        clean_STFT_batch = tf.expand_dims(tf.transpose(clean_STFT_batch, perm = [0,2,1]), axis = -1)
+        clean_STFT_abs   = tf.expand_dims(tf.transpose(clean_STFT_abs  , perm = [0,2,1]), axis = -1)
+        
+        # Extrai somente a magnitude da STFT
+        noisy_STFT_abs = tf.math.abs(noisy_STFT_batch)
+        
+        if use_phase:            
+            # Extrair somente magnitude da STFT
+            noisy_STFT_phase = tf.math.angle(noisy_STFT_batch)
+            clean_STFT_phase = tf.math.angle(clean_STFT_batch)
+            
+            return (noisy_STFT_abs, clean_STFT_abs, noisy_STFT_phase, clean_STFT_phase)
+        else:
+            return (noisy_STFT_abs, clean_STFT_abs)
     
-    noisy_STFT, clean_STFT, _, _ = audio_pre_processing(
-                    clean_audio, noisy_audio, nperseg = nperseg, nfft = nfft, time_frames = time_frames,  
-                    noverlap = noverlap, sample_rate = sample_rate, phase_aware_target = phase_aware_target, window = window)
+    # ---------------------------------- Cria e define a pipeline do dataset --------------------------------------------------
     
-    # Adequa o shape dos espectrogramas (batch_size,nfft//2 + 1,time_frames,1)
-    audio_BS = np.shape(clean_STFT)[0]
-    noisy_STFT = np.reshape(noisy_STFT, (audio_BS, nfft//2 + 1, time_frames, 1))
-    clean_STFT = np.reshape(clean_STFT, (audio_BS, nfft//2 + 1,           1, 1))
+    ds = tf_ds.from_tensor_slices(file_list)
+    if train_ds:
+        ds = ds.shuffle(buffer_size = len(file_list), seed = None, reshuffle_each_iteration = True)
+    ds = ds.map(aux_load_func, num_parallel_calls = workers , deterministic = False)
+    ds = ds.map(set_tensor_shapes, num_parallel_calls = workers , deterministic = False)
+    ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = False)
+    if train_ds:
+        ds = ds.unbatch()
+        ds = ds.shuffle(buffer_size = buffer*batch_size, seed = None, reshuffle_each_iteration = True)
+        ds = ds.batch(batch_size, drop_remainder = True)
+    #else:
+    #    ds = ds.rebatch(batch_size, drop_remainder = True)
+    ds = ds.prefetch(buffer_size = buffer)
+    ds = ds.repeat(epochs)
     
-    return (tensor(noisy_STFT), tensor(clean_STFT))
+    return ds
     
 def batch_generator(file_list, batch_size, total_batches, sample_rate = 16000, nperseg = 512, nfft = None,
                     time_frames = 16, noverlap = None, debug = False, random_batches = True, buffer_mult = 20,
@@ -412,15 +493,15 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         x = Conv2D(18, (9, length), padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        x = Dropout(0.05)(x)
+        #x = Dropout(0.05)(x)
         x = Conv2D(30, (5, 1),padding='same', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False,**kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        x = Dropout(0.05)(x)
+        #x = Dropout(0.05)(x)
         x = Conv2DTranspose(length, (9, 1),padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
-        x = Dropout(0.05)(x)
+        #x = Dropout(0.05)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
