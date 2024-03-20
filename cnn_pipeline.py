@@ -194,10 +194,6 @@ print('Calculando o total de batches de treinamento...')
 batches_per_epoch = pf.compute_dataset_total_batches(train_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
                                                   noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto!')
-print('Calculando o total de batches de validação...')
-validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
-                                                 noverlap = noverlap, nperseg = nperseg, window = window)
-print('Pronto')
 
 train_ds = pf.build_tf_dataset(train_list, train_ds = True, workers = 8, nperseg = nperseg, noverlap = noverlap, 
                                fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size, 
@@ -207,7 +203,7 @@ val_ds   = pf.build_tf_dataset(val_list , train_ds = False, workers = 8, nperseg
                                epochs = epochs, phase_aware = phase_aware, use_phase = False)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
-print('Total de batches de validação:   ', validation_steps )
+print('Total de batches de validação:   ', len(val_list) )
 print('Total de arquivos de áudio de treinamento:', len(train_list))
 print('Total de arquivos de áudio de validação:  ', len(val_list)  )
 

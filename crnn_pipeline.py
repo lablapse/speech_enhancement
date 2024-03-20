@@ -35,7 +35,7 @@ import project_functions as pf
 
 # %%
 # Define a GPU visível (0 -> 3080; 1 -> 3090)
-pf.set_gpu(1)
+pf.set_gpu(0)
 
 # Carrega o arquivo de configurações do teste atual
 with open('./config_files/CurrentTest.yml', 'r') as file:
@@ -53,10 +53,10 @@ phase_aware = test_config['model']['phase_aware']
 batch_size = test_config['model']['batch_size']
 epochs = test_config['model']['epochs']
 random = test_config['model']['random']
-buff_mult = test_config['dataset']['buff_mult']
 
 noise_list = test_config['dataset']['noise_list']
 SNR_list = test_config['dataset']['SNR_list']
+buff_mult = test_config['dataset']['buff_mult']
 
 testID = test_config['testID']
 
@@ -205,38 +205,16 @@ print('Calculando o total de batches de treinamento...')
 batches_per_epoch = pf.compute_dataset_total_batches(train_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
                                                   noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto!')
-print('Calculando o total de batches de validação...')
-validation_steps = pf.compute_dataset_total_batches(val_list, batch_size, spectrogram_length = time_frames, sample_rate = fs,
-                                                 noverlap = noverlap, nperseg = nperseg, window = window)
-print('Pronto')
 
-def train_gen():
-    ref_gen = pf.batch_generator(train_list, batch_size, total_batches = batches_per_epoch - 1, time_frames = time_frames, 
-                              phase_aware_target = phase_aware, random_batches = random, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
-    while True:
-        yield next(ref_gen)
-
-def val_gen():
-    ref_gen = pf.batch_generator(val_list, batch_size, total_batches = validation_steps - 1, time_frames = time_frames,
-                              phase_aware_target = phase_aware, random_batches = False, sample_rate = fs, noverlap = noverlap,
-                              nperseg = nperseg, buffer_mult = buff_mult, window = window)
-    while True:
-        yield next(ref_gen) 
-
-train_ds = tf_ds.from_generator(train_gen, output_signature = 
-                                (tf.TensorSpec(shape = (batch_size, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
-                                 tf.TensorSpec(shape = (batch_size, nfft//2 + 1,           1, 1), dtype = tf.float32)))
-val_ds = tf_ds.from_generator(val_gen, output_signature = 
-                              (tf.TensorSpec(shape = (batch_size, nfft//2 + 1, time_frames, 1), dtype = tf.float32),
-                               tf.TensorSpec(shape = (batch_size, nfft//2 + 1,           1, 1), dtype = tf.float32)))
-
-buff = 20
-train_ds = train_ds.prefetch(buffer_size = buff)
-val_ds = val_ds.prefetch(buffer_size = buff)
+train_ds = pf.build_tf_dataset(train_list, train_ds = True, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                               fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size, 
+                               epochs = epochs, phase_aware = phase_aware, use_phase = False)
+val_ds   = pf.build_tf_dataset(val_list , train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                               fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size,
+                               epochs = epochs, phase_aware = phase_aware, use_phase = False)
 
 print('Total de batches de treinamento: ', batches_per_epoch)
-print('Total de batches de validação:   ', validation_steps )
+print('Total de batches de validação:   ', len(val_list) )
 print('Total de arquivos de áudio de treinamento:', len(train_list))
 print('Total de arquivos de áudio de validação:  ', len(val_list)  )
 
@@ -268,7 +246,7 @@ if not os.path.exists(log_folder):
 
 # %%
 callbacks = [#EarlyStopping(monitor='val_loss', mode='auto', verbose=1, patience=10),
-             ReduceLROnPlateau(monitor='val_SDR', factor=0.5, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
+             ReduceLROnPlateau(monitor='val_SDR', factor=0.75, min_delta = 0.2, patience=4, mode='max', min_lr=1e-6,),
              ModelCheckpoint(filepath=CRNN_checkpoint_path, save_best_only = True, save_format='tf', monitor='val_SDR', mode='max'),
              #ModelCheckpoint(filepath=CNN_checkpoint_path, save_best_only = True, save_weights_only = True),
              CSVLogger(filename=CRNN_log_path, separator=',', append=False)
@@ -280,10 +258,7 @@ history_CRNN = model_CRNN.fit(train_ds,
                     steps_per_epoch = batches_per_epoch,
                     callbacks = callbacks,
                     validation_data = val_ds,
-                    validation_steps = validation_steps,
-                    max_queue_size = 10,
-                    workers = 1,
-                    use_multiprocessing = False,
+                    validation_steps = len(val_list),
                     verbose = 1)
 
 

@@ -2,15 +2,18 @@ model:
   fs: 8000
   nperseg: 256
   nfft: 256
-  noverlap: 128
+  noverlap: 192
+  window: 'hamming'
   time_frames: 8
   phase_aware: False
   batch_size: 512
-  epochs: 30
+  epochs: 50
   random: True
+  use_true_normalization: False
 
 dataset:
   noise_list: ['Babble', 'Cafe', 'Car', 'LR', 'Street', 'White']
   SNR_list: [-5, 0, 5, 10, 15, 20]
+  buff_mult: 200
 
 testID: 'Test3'
