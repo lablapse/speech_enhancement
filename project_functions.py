@@ -465,7 +465,7 @@ class Normalize_input(tf.keras.layers.Layer):
         })
         return config
 
-def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
+def CR_CED_model(input_shape, norm_params = None, n_reps = 5):
     length = input_shape[1]
     
     i = Input(input_shape)
@@ -481,6 +481,7 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
     for k in range(n_reps):
         # Varíavel com o ponto de origem da próxima conexão skip a ser realizada 
         skip_vertix = x 
+        
         x = Conv2D(18, (9, length), padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
         x = ReLU(negative_slope=0.01)(x)
@@ -496,9 +497,10 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5, skip = True):
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
-        if skip and k > 0:
-            # Realiza a conexão skip
-            x = Add()([skip_vertix, x])
+        else:
+            skip_vertix = Reshape((input_shape[0],1,length))(skip_vertix)
+        #Realiza a conexão skip
+        x = Add()([skip_vertix, x])
     
     x = Conv2D(1, (input_shape[0], 1), padding='same',**kwargs)(x)
     x = ReLU(negative_slope=0.01)(x)
@@ -595,37 +597,37 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
 
 # Função para reconstruir os sinais a partir dos batches com espectrogramas do áudio ruidoso
 # e espectros do áudio limpo
-def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):    
+def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
+    # Calcula a quantidade de amostras usadas para efetuar o janelamento (com base nas dimensões do batch)
+    nperseg = 2*(np.shape(batch[0])[1] - 1)    
     if noverlap == None:
-        nperseg = 2*(np.shape(batch[0])[0] - 1)
         noverlap = nperseg - nperseg//4
-    
     # --------- Noisy and Predicted Signals --------
     noisy_STFT_batch = batch[0]
     noisy_angle_batch = batch[2][:,:,-1,0]
-    noisy_angle_batch = np.reshape(noisy_angle_batch,np.shape(batch[1])[0:2]).T
+    noisy_angle_batch = np.reshape(noisy_angle_batch, (-1, nperseg//2 + 1))
         
-    pred_STFT_abs = model(noisy_STFT_batch)  # Chama o modelo diretamente, teoricamente evita os memory leaks de model.predict()
-    pred_STFT_abs = np.reshape(pred_STFT_abs,np.shape(batch[1])[0:2]).T
+    pred_STFT_abs = model(noisy_STFT_batch, training = False)  # Chama o modelo diretamente, teoricamente evita os memory leaks de model.predict()
+    pred_STFT_abs = np.reshape(pred_STFT_abs, (-1, nperseg//2 + 1))
     
     noisy_STFT_abs = batch[0][:,:,-1,0]
-    noisy_STFT_abs = np.reshape(noisy_STFT_abs,np.shape(batch[1])[0:2]).T
+    noisy_STFT_abs = np.reshape(noisy_STFT_abs, (-1, nperseg//2 + 1))
     
     pred_STFT = pred_STFT_abs*np.exp(1j*noisy_angle_batch)
     noisy_STFT = noisy_STFT_abs*np.exp(1j*noisy_angle_batch)
     
-    _,pred_signal = signal.istft(pred_STFT, noverlap = noverlap, window = window)
-    _,noisy_signal = signal.istft(noisy_STFT, noverlap = noverlap, window = window)
+    pred_signal  = tf.signal.inverse_stft(pred_STFT , frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
+    noisy_signal = tf.signal.inverse_stft(noisy_STFT, frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
         
     # --------- Clean Signal --------    
     clean_STFT_abs = batch[1]
     clean_angle = batch[3]
-    clean_STFT_abs = np.reshape(clean_STFT_abs,np.shape(batch[1])[0:2]).T
-    clean_angle = np.reshape(clean_angle,np.shape(batch[1])[0:2]).T
-        
+    clean_STFT_abs = np.reshape(clean_STFT_abs, (-1, nperseg//2 + 1))
+    clean_angle = np.reshape(clean_angle, (-1, nperseg//2 + 1))
+    
     clean_STFT = clean_STFT_abs*np.exp(1j*clean_angle)
-        
-    _, clean_signal = signal.istft(clean_STFT, noverlap = noverlap, window = window)
+    
+    clean_signal = tf.signal.inverse_stft(clean_STFT, frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
     
     return noisy_signal, pred_signal, clean_signal
 
