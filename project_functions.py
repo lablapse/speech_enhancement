@@ -217,6 +217,17 @@ def load_audio(filepath, fs = None):
         
     return tf.squeeze(audio, -1)
 
+def prepare_spectrograms(audio, nperseg = 256, noverlap = 192, time_frames = 8, window_fn=tf.signal.hamming_window, use_phase = False):
+    STFT = tf.signal.stft(audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
+                          window_fn = window_fn, pad_end=True)
+    
+    # Extrai todos os espectrogramas com time_frames janelas temporais
+    STFT_slices = tf.signal.frame(STFT, time_frames, 1, axis = 0)
+    # Adiciona uma dimensão de canal e transpõe as dimensões de frequência e canal (None, time_frames, nperseg//2 + 1) -> (None, nperseg//2 + 1, time_frames, 1)
+    STFT_slices = tf.expand_dims(tf.transpose(STFT_slices, perm = [0,2,1]), axis = -1)
+    
+    return STFT_slices
+
 # Define um dataset do tensorflow de acordo com a configurações fornecidas
 # Pendências:
 #   > Implementar configuração de janelamento
@@ -250,49 +261,34 @@ def build_tf_dataset(file_list, training = True, workers = 1, nperseg = 256, nov
         return (noisy_audio, clean_audio)
 
     @tf.function
-    def aux_stft_map(noisy_audio, clean_audio):
-        noisy_STFT = tf.signal.stft(noisy_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
-                                    window_fn=tf.signal.hann_window, pad_end=True)
-        clean_STFT = tf.signal.stft(clean_audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
-                                    window_fn=tf.signal.hann_window, pad_end=True)
+    def new_stft_map(noisy_audio, clean_audio):
+        noisy_spec = prepare_spectrograms(noisy_audio, nperseg = nperseg, noverlap = noverlap, time_frames = time_frames, 
+                             window_fn=tf.signal.hamming_window, use_phase = use_phase)
+        clean_spec = prepare_spectrograms(clean_audio, nperseg = nperseg, noverlap = noverlap, time_frames = 1, 
+                             window_fn=tf.signal.hamming_window, use_phase = use_phase)[(time_frames - 1):]
         
-        # Produz os tensores contendo os espectrogramas de entrada e saída da rede
+        # Extrai os expectros de amplitude dos sinais
+        aux_noisy_spec = tf.expand_dims(noisy_spec[:,:,-1,:], axis = -1)
+        noisy_spec_abs = tf.math.abs(noisy_spec)
         if phase_aware:
             # Determina o espectrograma limpo (target) corrigindo a amplitude de acordo com a regra "phase aware"
             #   Tal regra faz o modelo aprender a ignorar (reduzir a amplitude) de bins de frequência cuja 
             #   diferença de ângulo (predita pelo modelo) entre o sinal limpo e ruidoso seja muito alta, 
             #   melhorando a qualidade do sinal. A regra é dada por |Sp| = max(|Sc|*cos(Theta_c - Theta_n), 0)
-            clean_STFT_abs = tf.math.real(clean_STFT*tf.math.conj(noisy_STFT))/(tf.math.abs(noisy_STFT) + 1e-3) # == |Sc|*cos(Theta_c - Theta_n)
+            clean_spec_abs = tf.math.real(clean_spec*tf.math.conj(aux_noisy_spec))/(tf.math.abs(aux_noisy_spec) + 1e-6) # == |Sc|*cos(Theta_c - Theta_n)
             # Zera completamente a amplitude de qualquer bin com diferença de fase > 90°
-            clean_STFT_abs = tf.math.maximum(clean_STFT_abs, 0) + 1e-8 # Tentar remover o termo 1e-8 no futuro!
+            clean_spec_abs = tf.math.maximum(clean_spec_abs, 0)
         else:
-            clean_STFT_abs = tf.math.abs(clean_STFT)
-        
-        noisy_STFT_batch = tf.signal.frame(noisy_STFT, time_frames, 1, axis = 0)
-        clean_STFT_batch = tf.signal.frame(clean_STFT,           1, 1, axis = 0)
-        clean_STFT_abs   = tf.signal.frame(clean_STFT_abs,       1, 1, axis = 0)
-        
-        # Remove os primeiros (time_frames - 1) frames de clean_STFT_batch e clean_STFT_abs
-        clean_STFT_batch = clean_STFT_batch[(time_frames - 1):]
-        clean_STFT_abs   = clean_STFT_abs[(time_frames - 1):]
-        
-        # Transpõe os índices para compatibilidade com o código pré-existente
-        # Também adiciona uma dimensão para os canais do espectrograma (apenas 1 canal)
-        noisy_STFT_batch = tf.expand_dims(tf.transpose(noisy_STFT_batch, perm = [0,2,1]), axis = -1)
-        clean_STFT_batch = tf.expand_dims(tf.transpose(clean_STFT_batch, perm = [0,2,1]), axis = -1)
-        clean_STFT_abs   = tf.expand_dims(tf.transpose(clean_STFT_abs  , perm = [0,2,1]), axis = -1)
-        
-        # Extrai somente a magnitude da STFT
-        noisy_STFT_abs = tf.math.abs(noisy_STFT_batch)
-        
-        if use_phase:            
-            # Extrair somente magnitude da STFT
-            noisy_STFT_phase = tf.math.angle(noisy_STFT_batch)
-            clean_STFT_phase = tf.math.angle(clean_STFT_batch)
+            clean_spec_abs = tf.math.abs(clean_spec)
             
-            return (noisy_STFT_abs, clean_STFT_abs, noisy_STFT_phase, clean_STFT_phase)
+        # Extrai as fases dos sinais para posterior reconstrução (se solicitado)
+        if use_phase:            
+            noisy_spec_phase = tf.math.angle(noisy_spec)
+            clean_spec_phase = tf.math.angle(clean_spec)
+            
+            return (noisy_spec_abs, clean_spec_abs, noisy_spec_phase, clean_spec_phase)
         else:
-            return (noisy_STFT_abs, clean_STFT_abs)
+            return (noisy_spec_abs, clean_spec_abs)
     
     # ---------------------------------- Cria e define a pipeline do dataset --------------------------------------------------
     
@@ -303,7 +299,7 @@ def build_tf_dataset(file_list, training = True, workers = 1, nperseg = 256, nov
     ds = ds.map(set_tensor_shapes, num_parallel_calls = workers , deterministic = not training)
     if training:
         ds = ds.map(augmentation, num_parallel_calls = workers, deterministic = not training)
-    ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = not training)
+    ds = ds.map(new_stft_map, num_parallel_calls = workers , deterministic = not training)
     if training:
         ds = ds.unbatch()
         ds = ds.shuffle(buffer_size = buffer*batch_size, seed = None, reshuffle_each_iteration = True)
