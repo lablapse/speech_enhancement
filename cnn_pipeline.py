@@ -195,10 +195,10 @@ batches_per_epoch = pf.compute_dataset_total_batches(train_list, batch_size, spe
                                                   noverlap = noverlap, nperseg = nperseg, window = window)
 print('Pronto!')
 
-train_ds = pf.build_tf_dataset(train_list, train_ds = True, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+train_ds = pf.build_tf_dataset(train_list, training = True, workers = 8, nperseg = nperseg, noverlap = noverlap, 
                                fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size, 
                                epochs = epochs, phase_aware = phase_aware, use_phase = False)
-val_ds   = pf.build_tf_dataset(val_list , train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+val_ds   = pf.build_tf_dataset(val_list , training = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
                                fs = fs, time_frames = time_frames, buffer = buff_mult, batch_size = batch_size,
                                epochs = epochs, phase_aware = phase_aware, use_phase = False)
 

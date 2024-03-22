@@ -21,7 +21,7 @@ import tensorflow_io as tfio
 from tensorflow.keras import Model
 from tensorflow.keras import backend as K
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Reshape, Input, Add
+from tensorflow.keras.layers import Dense, Dropout, Reshape, Input, Add, Lambda
 from tensorflow.keras.layers import Conv2D, Conv2DTranspose, Activation, ReLU
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import GRU
@@ -206,32 +206,46 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
                         
     return noisy_STFT, clean_STFT, noisy_angle, clean_angle
 
+# Define função para carreamento de áudio a determinada taxa de amostragem
+
+def load_audio(filepath, fs = None):
+    audio_file = tf.io.read_file(filepath)
+    audio, file_fs = tf.audio.decode_wav(audio_file)
+    
+    if (fs != None) and (fs != file_fs):
+        audio = tfio.audio.resample(audio, tf.cast(file_fs,tf.int64), fs)
+        
+    return tf.squeeze(audio, -1)
+
 # Define um dataset do tensorflow de acordo com a configurações fornecidas
 # Pendências:
 #   > Implementar configuração de janelamento
-#   > Substituir parâmetro train_ds por training
-#   > Ao treinar a CRNN a última época é interrompida por falta de dados, investigar motivo
-def build_tf_dataset(file_list, train_ds = True, workers = 1, nperseg = 256, noverlap = 192, 
+def build_tf_dataset(file_list, training = True, workers = 1, nperseg = 256, noverlap = 192, 
                      fs = 8000, time_frames = 8, buffer = 100, batch_size = 512, epochs = 10,
                      phase_aware = False, use_phase = False):
     # ---------------------------------- Define as funções necessárias ---------------------------------------------------------
     @tf.function
     def aux_load_func(file_pair):
-        clean_audio = tf.io.read_file(file_pair[1])
-        noisy_audio = tf.io.read_file(file_pair[0])
+        clean_audio = load_audio(file_pair[1], fs = fs)
+        noisy_audio = load_audio(file_pair[0], fs = fs)
         
-        clean_audio, _ = tf.audio.decode_wav(clean_audio)
-        noisy_audio, _ = tf.audio.decode_wav(noisy_audio)
-        
-        clean_audio = tfio.audio.resample(clean_audio, 16000, fs)
-        noisy_audio = tfio.audio.resample(noisy_audio, 16000, fs)
-        
-        return (tf.squeeze(noisy_audio, axis=-1), tf.squeeze(clean_audio, axis=-1))
+        return (noisy_audio, clean_audio)
 
     @tf.function
     def set_tensor_shapes(noisy_audio, clean_audio):
         noisy_audio.set_shape((None, ))
         clean_audio.set_shape((None, ))
+        
+        return (noisy_audio, clean_audio)
+    
+    # Data augmentation: Desloca a sequência em até (nperseg - noverlap - 1) amostras para alterar levemente os espectrogramas
+    @tf.function
+    def augmentation(noisy_audio, clean_audio):
+        pad_length = tf.random.uniform(shape = [], minval = 0, maxval = (nperseg - noverlap - 1), dtype=tf.dtypes.int32)
+        
+        if pad_length > 0:
+            noisy_audio = tf.pad(noisy_audio, [[pad_length, 0]], mode = 'CONSTANT', constant_values = 0)[:-pad_length]
+            clean_audio = tf.pad(clean_audio, [[pad_length, 0]], mode = 'CONSTANT', constant_values = 0)[:-pad_length]
         
         return (noisy_audio, clean_audio)
 
@@ -250,14 +264,14 @@ def build_tf_dataset(file_list, train_ds = True, workers = 1, nperseg = 256, nov
             #   melhorando a qualidade do sinal. A regra é dada por |Sp| = max(|Sc|*cos(Theta_c - Theta_n), 0)
             clean_STFT_abs = tf.math.real(clean_STFT*tf.math.conj(noisy_STFT))/(tf.math.abs(noisy_STFT) + 1e-3) # == |Sc|*cos(Theta_c - Theta_n)
             # Zera completamente a amplitude de qualquer bin com diferença de fase > 90°
-            #clean_STFT_abs = clean_STFT_abs*tf.cast(clean_STFT_abs > 0, tf.float32)
-            clean_STFT_abs = tf.math.maximum(clean_STFT_abs, 0) + 1e-8
+            clean_STFT_abs = tf.math.maximum(clean_STFT_abs, 0) + 1e-8 # Tentar remover o termo 1e-8 no futuro!
         else:
             clean_STFT_abs = tf.math.abs(clean_STFT)
         
         noisy_STFT_batch = tf.signal.frame(noisy_STFT, time_frames, 1, axis = 0)
         clean_STFT_batch = tf.signal.frame(clean_STFT,           1, 1, axis = 0)
         clean_STFT_abs   = tf.signal.frame(clean_STFT_abs,       1, 1, axis = 0)
+        
         # Remove os primeiros (time_frames - 1) frames de clean_STFT_batch e clean_STFT_abs
         clean_STFT_batch = clean_STFT_batch[(time_frames - 1):]
         clean_STFT_abs   = clean_STFT_abs[(time_frames - 1):]
@@ -283,17 +297,17 @@ def build_tf_dataset(file_list, train_ds = True, workers = 1, nperseg = 256, nov
     # ---------------------------------- Cria e define a pipeline do dataset --------------------------------------------------
     
     ds = tf_ds.from_tensor_slices(file_list)
-    if train_ds:
+    if training:
         ds = ds.shuffle(buffer_size = len(file_list), seed = None, reshuffle_each_iteration = True)
-    ds = ds.map(aux_load_func, num_parallel_calls = workers , deterministic = False)
-    ds = ds.map(set_tensor_shapes, num_parallel_calls = workers , deterministic = False)
-    ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = False)
-    if train_ds:
+    ds = ds.map(aux_load_func, num_parallel_calls = workers , deterministic = not training)
+    ds = ds.map(set_tensor_shapes, num_parallel_calls = workers , deterministic = not training)
+    if training:
+        ds = ds.map(augmentation, num_parallel_calls = workers, deterministic = not training)
+    ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = not training)
+    if training:
         ds = ds.unbatch()
         ds = ds.shuffle(buffer_size = buffer*batch_size, seed = None, reshuffle_each_iteration = True)
         ds = ds.batch(batch_size, drop_remainder = True)
-    #else:
-    #    ds = ds.rebatch(batch_size, drop_remainder = True)
     ds = ds.prefetch(buffer_size = buffer)
     ds = ds.repeat(epochs)
     
@@ -497,10 +511,8 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5):
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
             x = Reshape(input_shape)(x)
-        else:
-            skip_vertix = Reshape((input_shape[0],1,length))(skip_vertix)
-        #Realiza a conexão skip
-        x = Add()([skip_vertix, x])
+            #Realiza a conexão skip
+            x = Add()([skip_vertix, x])
     
     x = Conv2D(1, (input_shape[0], 1), padding='same',**kwargs)(x)
     x = ReLU(negative_slope=0.01)(x)
@@ -590,10 +602,6 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
             
             yield (tensor(noisy_STFT_batch),tensor(clean_STFT_batch),
                    tensor(noisy_angle_batch),tensor(clean_angle_batch))
-                
-#            batch = (tensor(noisy_STFT_batch[0:batch_size]),tensor(clean_STFT_batch[0:batch_size]))
-#            
-#            yield batch
 
 # Função para reconstruir os sinais a partir dos batches com espectrogramas do áudio ruidoso
 # e espectros do áudio limpo
@@ -655,4 +663,28 @@ def time_tests(model, data, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 
     for metric in scores:
         scores[metric] = np.mean(scores[metric])
     
+    return scores
+
+def tf_time_tests(model, dataset, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 16000, noverlap = 64, window = 'hann'):
+    # Monta um dicionário com as métricas ({"nome": list(Métricas para cada batch)})
+    scores = {metric: [] for metric in metrics_dict}
+    
+    # Complementa o dataset com uma pipeline para o processamento com o modelo e reconstrução do sinal
+    #ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = False)
+    dataset = dataset.map(lambda b, a, t, c: reconstruct_signal(model, (b, a, t, c), noverlap = noverlap, window = window),
+                num_parallel_calls = 8, deterministic = True)
+    dataset = dataset.prefetch(10)
+    data = dataset.as_numpy_iterator()
+    
+    for k in tqdm(range(n_batches)):
+        batch = next(data)
+        
+        # Roda as métricas selecionadas
+        for metric in metrics_dict:
+            scores[metric].append(metrics_dict[metric](batch[2], batch[1]))
+    
+    # Calcula a média de todos os batches para cada métrica
+    for metric in scores:
+        scores[metric] = np.mean(scores[metric])
+        
     return scores

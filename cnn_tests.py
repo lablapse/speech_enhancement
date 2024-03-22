@@ -239,12 +239,12 @@ for k in range(len(SNR_list)):
     test_gen = pf.full_audio_batch_generator(test_list, nperseg = nperseg, time_frames = time_frames, noverlap=noverlap,
                                              sample_rate = fs, phase_aware_target = phase_aware, window = window) """
     
-    train_ds = pf.build_tf_dataset(train_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
-                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
-    val_ds   = pf.build_tf_dataset(val_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
-                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
-    test_ds  = pf.build_tf_dataset(test_list, train_ds = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
-                                    fs = fs, time_frames = time_frames, epochs = 1, phase_aware = phase_aware, use_phase = True)
+    train_ds = pf.build_tf_dataset(train_list, training = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = len(metrics), phase_aware = phase_aware, use_phase = True)
+    val_ds   = pf.build_tf_dataset(val_list, training = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = len(metrics), phase_aware = phase_aware, use_phase = True)
+    test_ds  = pf.build_tf_dataset(test_list, training = False, workers = 8, nperseg = nperseg, noverlap = noverlap, 
+                                    fs = fs, time_frames = time_frames, epochs = len(metrics), phase_aware = phase_aware, use_phase = True)
     train_gen = train_ds.as_numpy_iterator()
     val_gen   = val_ds.as_numpy_iterator()
     test_gen  = test_ds.as_numpy_iterator()
