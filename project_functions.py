@@ -605,6 +605,25 @@ def full_audio_batch_generator(file_list, sample_rate = 16000, nperseg = 512, nf
             yield (tensor(noisy_STFT_batch),tensor(clean_STFT_batch),
                    tensor(noisy_angle_batch),tensor(clean_angle_batch))
 
+def new_reconstruct_signal(spectrograms_batch, noverlap, window_fn = tf.signal.hamming_window):
+    # Calcula a quantidade de amostras usadas para efetuar o janelamento (com base nas dimensões do batch)
+    freq_bins = spectrograms_batch[0].shape[1]
+    nperseg = 2*(freq_bins - 1)
+    
+    # Prepara o batch para reconstrução da stft
+    amplitude_batch = spectrograms_batch[0][:,:,-1,0]
+    amplitude_batch = tf.complex(tf.reshape(amplitude_batch, (-1, freq_bins)), 0.0)
+    phase_batch = spectrograms_batch[1][:,:,-1,0]
+    phase_batch = tf.complex(0.0,tf.reshape(phase_batch, (-1, freq_bins)))
+    
+    # Reconstroi a stft
+    stft = amplitude_batch*tf.math.exp(phase_batch)
+    
+    # Reconstroi o áudio no tempo
+    audio = tf.signal.inverse_stft(stft, frame_length = nperseg, frame_step = (nperseg - noverlap), window_fn = window_fn)
+    
+    return audio
+
 # Função para reconstruir os sinais a partir dos batches com espectrogramas do áudio ruidoso
 # e espectros do áudio limpo
 def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
@@ -667,23 +686,47 @@ def time_tests(model, data, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 
     
     return scores
 
-def tf_time_tests(model, dataset, n_batches, metrics_dict = {'MSE': MSE_metric}, fs = 16000, noverlap = 64, window = 'hann'):
+def tf_time_tests(model, dataset, n_batches, metrics_dict = {'MSE': MSE_metric}, nperseg = 256, fs = 16000, noverlap = 64, window = 'hann'):
     # Monta um dicionário com as métricas ({"nome": list(Métricas para cada batch)})
     scores = {metric: [] for metric in metrics_dict}
     
-    # Complementa o dataset com uma pipeline para o processamento com o modelo e reconstrução do sinal
-    #ds = ds.map(aux_stft_map, num_parallel_calls = workers , deterministic = False)
-    dataset = dataset.map(lambda b, a, t, c: reconstruct_signal(model, (b, a, t, c), noverlap = noverlap, window = window),
-                num_parallel_calls = 8, deterministic = True)
-    dataset = dataset.prefetch(10)
-    data = dataset.as_numpy_iterator()
+    # Bins de frequência das STFTs
+    freq_bins = nperseg//2 + 1
+    
+    # Generator auxiliar para a pipeline do tensorflow com a predição e reconstrução do sinal
+    def aux_predict_generator():
+        data_iterator = dataset.as_numpy_iterator()
+        
+        while True:
+            batch = next(data_iterator)
+            
+            noisy_amplitude_batch = batch[0]
+            pred_amplitude_batch = model(noisy_amplitude_batch, training = False)
+
+            yield (pred_amplitude_batch,) + batch[1:]
+    
+    # Funçãp auxiliar para reconstruir os sinais predito e limpo dentro da pipeline do tensorflow
+    def aux_rec_signals(pred_amplitude_batch, clean_amplitude_batch, noisy_phase_batch, clean_phase_batch):
+        pred_audio = new_reconstruct_signal((pred_amplitude_batch, noisy_phase_batch), noverlap = noverlap, window_fn = tf.signal.hamming_window)
+        clean_audio = new_reconstruct_signal((clean_amplitude_batch, clean_phase_batch), noverlap = noverlap, window_fn = tf.signal.hamming_window)
+        
+        return (pred_audio, clean_audio)
+    
+    # Tensorflow Dataset com a pipeline de processamento da reconstrução do sinal (para máximo desempenho)
+    aux_ds = tf_ds.from_generator(aux_predict_generator, output_signature= (tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32)))
+    aux_ds = aux_ds.map(aux_rec_signals, num_parallel_calls = 8, deterministic = True)
+    aux_ds = aux_ds.prefetch(10)
+    aux_iter = aux_ds.as_numpy_iterator()
     
     for k in tqdm(range(n_batches)):
-        batch = next(data)
+        batch = next(aux_iter)
         
         # Roda as métricas selecionadas
         for metric in metrics_dict:
-            scores[metric].append(metrics_dict[metric](batch[2], batch[1]))
+            scores[metric].append(metrics_dict[metric](batch[1], batch[0]))
     
     # Calcula a média de todos os batches para cada métrica
     for metric in scores:
