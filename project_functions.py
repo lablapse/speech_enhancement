@@ -494,15 +494,15 @@ def CR_CED_model(input_shape, norm_params = None, n_reps = 5):
         
         x = Conv2D(18, (9, length), padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
-        x = ReLU(negative_slope=0.01)(x)
+        x = ReLU(negative_slope=0.1)(x)
         #x = Dropout(0.05)(x)
         x = Conv2D(30, (5, 1),padding='same', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False,**kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
-        x = ReLU(negative_slope=0.01)(x)
+        x = ReLU(negative_slope=0.1)(x)
         #x = Dropout(0.05)(x)
         x = Conv2DTranspose(length, (9, 1),padding='valid', kernel_constraint = UnitNorm(axis = [0, 1, 2]), use_bias = False, **kwargs)(x)
         x = BatchNormalization(momentum = 0.997, epsilon = 1e-6)(x)
-        x = ReLU(negative_slope=0.01)(x)
+        x = ReLU(negative_slope=0.1)(x)
         #x = Dropout(0.05)(x)
         if k < n_reps - 1:
             # Faz o reshape de (129,1,8) para (129,8,1), mantendo a estrutura da próxima rede R-CED
