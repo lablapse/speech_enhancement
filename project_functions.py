@@ -206,8 +206,7 @@ def audio_pre_processing(clean_audio, noisy_audio, nperseg = 512, nfft = None, t
                         
     return noisy_STFT, clean_STFT, noisy_angle, clean_angle
 
-# Define função para carreamento de áudio a determinada taxa de amostragem
-
+# Função para carreamento de áudio a determinada taxa de amostragem
 def load_audio(filepath, fs = None):
     audio_file = tf.io.read_file(filepath)
     audio, file_fs = tf.audio.decode_wav(audio_file)
@@ -217,7 +216,8 @@ def load_audio(filepath, fs = None):
         
     return tf.squeeze(audio, -1)
 
-def prepare_spectrograms(audio, nperseg = 256, noverlap = 192, time_frames = 8, window_fn=tf.signal.hamming_window, use_phase = False):
+# Determina os espectrogramas de comprimento time_frames do sinal de audio
+def prepare_spectrograms(audio, nperseg = 256, noverlap = 192, time_frames = 8, window_fn=tf.signal.hamming_window):
     STFT = tf.signal.stft(audio, frame_length = nperseg, frame_step = (nperseg - noverlap), 
                           window_fn = window_fn, pad_end=True)
     
@@ -253,19 +253,20 @@ def build_tf_dataset(file_list, training = True, workers = 1, nperseg = 256, nov
     @tf.function
     def augmentation(noisy_audio, clean_audio):
         pad_length = tf.random.uniform(shape = [], minval = 0, maxval = (nperseg - noverlap - 1), dtype=tf.dtypes.int32)
+        gain = tf.random.uniform(shape = [], minval = 0.80, maxval = 1.25, dtype = tf.dtypes.float32)
         
         if pad_length > 0:
             noisy_audio = tf.pad(noisy_audio, [[pad_length, 0]], mode = 'CONSTANT', constant_values = 0)[:-pad_length]
             clean_audio = tf.pad(clean_audio, [[pad_length, 0]], mode = 'CONSTANT', constant_values = 0)[:-pad_length]
         
-        return (noisy_audio, clean_audio)
+        return (gain*noisy_audio, gain*clean_audio)
 
     @tf.function
     def new_stft_map(noisy_audio, clean_audio):
         noisy_spec = prepare_spectrograms(noisy_audio, nperseg = nperseg, noverlap = noverlap, time_frames = time_frames, 
-                             window_fn=tf.signal.hamming_window, use_phase = use_phase)
+                             window_fn=tf.signal.hamming_window)
         clean_spec = prepare_spectrograms(clean_audio, nperseg = nperseg, noverlap = noverlap, time_frames = 1, 
-                             window_fn=tf.signal.hamming_window, use_phase = use_phase)[(time_frames - 1):]
+                             window_fn=tf.signal.hamming_window)[(time_frames - 1):]
         
         # Extrai os expectros de amplitude dos sinais
         aux_noisy_spec = tf.expand_dims(noisy_spec[:,:,-1,:], axis = -1)
