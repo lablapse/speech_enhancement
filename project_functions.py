@@ -560,6 +560,11 @@ def SDR(y_true, y_pred):
     P_clean_signal = K.mean(K.square(y_true))
     return 10*K.log(P_clean_signal/P_distortion)/K.log(10.0)
 
+def ISDR(y_true, y_pred):
+    P_distortion = K.mean(K.square(y_true - y_pred))
+    P_clean_signal = K.mean(K.square(y_true))
+    return P_distortion/(P_clean_signal - 1e-6)
+
 #################################################################################################################
 # Testes                                                                                                        #
 #################################################################################################################
