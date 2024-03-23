@@ -296,11 +296,11 @@ def build_tf_dataset(file_list, training = True, workers = 1, nperseg = 256, nov
     ds = tf_ds.from_tensor_slices(file_list)
     if training:
         ds = ds.shuffle(buffer_size = len(file_list), seed = None, reshuffle_each_iteration = True)
-    ds = ds.map(aux_load_func, num_parallel_calls = workers , deterministic = not training)
-    ds = ds.map(set_tensor_shapes, num_parallel_calls = workers , deterministic = not training)
+    ds = ds.map(aux_load_func, num_parallel_calls = workers, deterministic = not training)
+    ds = ds.map(set_tensor_shapes, num_parallel_calls = workers, deterministic = not training)
     if training:
         ds = ds.map(augmentation, num_parallel_calls = workers, deterministic = not training)
-    ds = ds.map(new_stft_map, num_parallel_calls = workers , deterministic = not training)
+    ds = ds.map(new_stft_map, num_parallel_calls = workers, deterministic = not training)
     if training:
         ds = ds.unbatch()
         ds = ds.shuffle(buffer_size = buffer*batch_size, seed = None, reshuffle_each_iteration = True)
@@ -628,7 +628,7 @@ def new_reconstruct_signal(spectrograms_batch, noverlap, window_fn = tf.signal.h
 # e espectros do áudio limpo
 def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
     # Calcula a quantidade de amostras usadas para efetuar o janelamento (com base nas dimensões do batch)
-    nperseg = 2*(batch[0].shape[1] - 1)    
+    nperseg = 2*(batch[0].shape[1] - 1)
     if noverlap == None:
         noverlap = nperseg - nperseg//4
     # --------- Noisy and Predicted Signals --------
@@ -647,8 +647,8 @@ def reconstruct_signal(model, batch, noverlap = None, window = 'hann'):
     
     pred_signal  = tf.signal.inverse_stft(pred_STFT , frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
     noisy_signal = tf.signal.inverse_stft(noisy_STFT, frame_length = nperseg, frame_step = nperseg - noverlap, window_fn = tf.signal.hamming_window)
-        
-    # --------- Clean Signal --------    
+    
+    # --------- Clean Signal --------
     clean_STFT_abs = batch[1]
     clean_angle = batch[3]
     clean_STFT_abs = tf.complex(tf.reshape(clean_STFT_abs, (-1, nperseg//2 + 1)), 0.0)
@@ -713,10 +713,11 @@ def tf_time_tests(model, dataset, n_batches, metrics_dict = {'MSE': MSE_metric},
         return (pred_audio, clean_audio)
     
     # Tensorflow Dataset com a pipeline de processamento da reconstrução do sinal (para máximo desempenho)
-    aux_ds = tf_ds.from_generator(aux_predict_generator, output_signature= (tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
-                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
-                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
-                                                                            tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32)))
+    aux_ds = tf_ds.from_generator(aux_predict_generator, 
+                                  output_signature=(tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                    tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                    tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32),
+                                                    tf.TensorSpec(shape = (None, freq_bins, None, 1), dtype = tf.float32)))
     aux_ds = aux_ds.map(aux_rec_signals, num_parallel_calls = 8, deterministic = True)
     aux_ds = aux_ds.prefetch(10)
     aux_iter = aux_ds.as_numpy_iterator()
